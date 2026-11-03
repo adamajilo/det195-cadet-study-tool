@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Briefing Room | Det 195 Warrior Knowledge</title>
+<meta name="theme-color" content="#0f1b2d">
+<meta name="description" content="Spaced-repetition study trainer for AFROTC Detachment 195 Warrior Knowledge, Fall 2026.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23ff5a36'/%3E%3Cpath d='M7 21l9-10 9 10M7 27l9-10 9 10' fill='none' stroke='%230f1b2d' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="#home">
+    <svg viewBox="0 0 32 32" width="34" height="34" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#ff5a36"/><path d="M7 21l9-10 9 10M7 27l9-10 9 10" fill="none" stroke="#0f1b2d" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span><b>Briefing Room</b><small>Det 195 Warrior Knowledge</small></span>
+  </a>
+  <nav class="nav" id="nav" aria-label="Study navigation">
+    <a href="#home" data-r="home"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9H3z"/></svg>Home</a>
+    <a href="#drill" data-r="drill"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2"/></svg>Drill</a>
+    <a href="#test" data-r="test"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 3h6"/></svg>Test</a>
+    <a href="#recite" data-r="recite"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h9"/></svg>Recite</a>
+    <a href="#plan" data-r="plan"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16"/></svg>Plan</a>
+  </nav>
+  <div class="chip-streak" id="streak"></div>
+</header>
+<main id="app"></main>
+<script src="songs.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
