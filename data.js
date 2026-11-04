@@ -155,7 +155,7 @@ add(4, "Adversaries", [
 
 add(6, "Chain of Command", [
   ["President", "The Honorable Donald J. Trump"],
-  ["Secretary of Defense", "The Honorable Pete Hegseth"],
+  ["Secretary of War", "The Honorable Pete Hegseth"],
   ["Secretary of the Air Force", "The Honorable Troy Meink"],
   ["Chairman of the Joint Chiefs of Staff", "General Dan Caine"],
   ["Chief of Staff of the Air Force", "General Kenneth S. Wilsbach"],
@@ -495,7 +495,7 @@ const R = [
 const IMG = {
   "Chain of Command": {
     "President": "images/nationalcoc/president.webp",
-    "Secretary of Defense": "images/nationalcoc/secdef.webp",
+    "Secretary of War": "images/nationalcoc/secwar.webp",
     "Secretary of the Air Force": "images/nationalcoc/secaf.webp",
     "Chairman of the Joint Chiefs of Staff": "images/nationalcoc/cjcs.webp",
     "Chief of Staff of the Air Force": "images/nationalcoc/csaf.webp",
