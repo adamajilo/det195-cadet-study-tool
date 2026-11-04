@@ -142,6 +142,13 @@ main {
     padding: 24px 16px 96px
 }
 
+.brand-logo {
+  width: 100px;
+  height: 100px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
 .h {
     font: 700 2rem/1.1 var(--d);
     margin: 0 0 4px
