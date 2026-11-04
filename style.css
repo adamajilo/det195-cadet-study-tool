@@ -834,3 +834,13 @@ button:disabled {
 .opts:has(.ans) {
     grid-template-columns: 1fr
 }
+
+:root{--soft:#eef2f6}
+@media (prefers-color-scheme:dark){:root{--soft:#1d2b40}}
+.termsw{display:flex;gap:6px}
+.termsw .tg{background:transparent;color:#cdd8e6;border-color:#2c3d57;padding:3px 12px}
+.termsw .tg[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+@media (max-width:760px){.top{flex-wrap:wrap}.termsw{order:3;width:100%}}
+
+#jq{flex:1;min-width:200px;font:1rem var(--b);padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+@media (max-width:760px){.nav a{padding:6px 5px;font-size:.7rem}}

@@ -2,7 +2,9 @@ const $=(s,r=document)=>r.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
 const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
 const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-const keyOf=c=>c.w+"|"+c.q;
+const termOf=x=>x.term||"Fall";
+const keyOf=c=>(termOf(c)==="Fall"?"":termOf(c)+"|")+c.w+"|"+c.q;
+const gk=c=>termOf(c)+"||"+c.g;
 const ymd=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 const today=()=>ymd(new Date());
 const addDays=n=>{const d=new Date();d.setDate(d.getDate()+n);return ymd(d)};
@@ -18,10 +20,12 @@ const saveSrs=()=>store.set("wk2_srs",srs);
 function touchDay(){const t=today();if(!days.includes(t)){days.push(t);store.set("wk2_days",days.slice(-90))}}
 function streak(){let n=0;const d=new Date();if(!days.includes(ymd(d)))d.setDate(d.getDate()-1);while(days.includes(ymd(d))){n++;d.setDate(d.getDate()-1)}return n}
 
-const visible=c=>(cfg.zh||c.kind!=="zh")&&(cfg.ac||(c.kind!=="ac"&&c.g!=="Aircraft"));
-const weeksFor=t=>t.scope||(t.w===5?[1,2,3,4]:t.w===9?WEEKS:[t.w]);
+const baseVis=c=>(cfg.zh||c.kind!=="zh")&&(cfg.jobs||c.kind!=="job")&&(cfg.ac||(c.kind!=="ac"&&c.g!=="Aircraft"));
+const visible=c=>baseVis(c)&&(cfg.term==="All"||termOf(c)===cfg.term||c.kind==="job");
+const weeksIn=tm=>[...new Set(C.filter(c=>termOf(c)===tm&&c.kind!=="job").map(c=>c.w))].sort((a,b)=>a-b);
+const weeksFor=t=>t.scope||(t.w===5?[1,2,3,4]:t.w===9?weeksIn(termOf(t)):[t.w]);
 const nextTest=()=>SCHED.find(t=>t.d>=today()&&t.w!==0)||SCHED[SCHED.length-1];
-const scopeCards=ws=>C.filter(c=>visible(c)&&ws.includes(c.w));
+const scopeCards=(ws,tm)=>C.filter(c=>baseVis(c)&&termOf(c)===tm&&ws.includes(c.w));
 const box=c=>(srs[keyOf(c)]||{b:0}).b;
 const isDue=c=>{const s=srs[keyOf(c)];return !s||s.d<=today()};
 const mastered=c=>box(c)>=4;
@@ -59,13 +63,13 @@ function startDrill(cards,smart){
 }
 
 function home(){
-  const t=nextTest(),sc=scopeCards(weeksFor(t)),all=C.filter(visible);
+  const t=nextTest(),sc=scopeCards(weeksFor(t),termOf(t)),all=C.filter(visible);
   const left=Math.max(0,daysBetween(today(),t.d));
   const due=sc.filter(c=>box(c)>0&&isDue(c)).length;
-  const tiles=[...new Set(all.map(c=>c.g))].map(g=>{
-    const cs=all.filter(c=>c.g===g);
+  const tiles=[...new Set(all.map(gk))].map(g=>{
+    const cs=all.filter(c=>gk(c)===g);
     const bx=[0,1,2,3,4,5].map(n=>cs.filter(c=>box(c)===n).length);
-    return`<button class="tile" data-g="${esc(g)}"><b>${esc(g)}</b><span>Week ${cs[0].w}, ${cs.length} cards, ${bx[4]+bx[5]} mastered</span><i class="seg">${bx.map((n,i)=>`<u class="b${i}" style="flex:${n}"></u>`).join("")}</i></button>`;
+    return`<button class="tile" data-g="${esc(g)}"><b>${esc(cs[0].g)}</b><span>${cfg.term==="All"&&terms().length>1&&cs[0].kind!=="job"?termLabel(termOf(cs[0]))+", ":""}${cs[0].w?"Week "+cs[0].w+", ":"Reference, "}${cs.length} cards, ${bx[4]+bx[5]} mastered</span><i class="seg">${bx.map((n,i)=>`<u class="b${i}" style="flex:${n}"></u>`).join("")}</i></button>`;
   }).join("");
   $("#app").innerHTML=`
   <section class="hero"><div><p class="kick">UP NEXT</p><h2>${esc(t.t)}</h2><p>${left===0?"Today":left+(left===1?" day":" days")} away, ${fmt(t.d)}. ${esc(t.f)}</p></div><button class="btn go" id="goTest">Study this test</button></section>
@@ -73,7 +77,7 @@ function home(){
   <h2 class="h">Topics</h2><p class="sub">Tap a topic to drill it. The bar shows how far each card has climbed, from new on the left to mastered on the right.</p>
   <div class="tiles">${tiles}</div>`;
   $("#goTest").onclick=()=>startDrill(sc);
-  document.querySelectorAll(".tile").forEach(b=>b.onclick=()=>startDrill(all.filter(c=>c.g===b.dataset.g)));
+  document.querySelectorAll(".tile").forEach(b=>b.onclick=()=>startDrill(all.filter(c=>gk(c)===b.dataset.g)));
 }
 
 function drill(){
@@ -105,7 +109,7 @@ function drill(){
     const A=`${shots(c)}<p class="ft${c.kind==="zh"?" zh":""}">${esc(c.a)}</p>`;
     const [f,b]=cfg.rev?[A,P]:[P,A];
     app.innerHTML=`<div class="prog"><i style="width:${D.i/D.q.length*100}%"></i></div>
-    <div class="flip ${D.on?"on":""}" id="flip"><div class="face front"><div class="tag"><span>Week ${c.w}, ${esc(c.g)}</span><span>${box(c)?"Box "+box(c):"New"}</span></div>${f}</div><div class="face back"><div class="tag"><span>Week ${c.w}, ${esc(c.g)}</span><span>${box(c)?"Box "+box(c):"New"}</span></div>${b}</div></div>
+    <div class="flip ${D.on?"on":""}" id="flip"><div class="face front"><div class="tag"><span>${c.w?"Week "+c.w+", ":""}${esc(c.g)}</span><span>${box(c)?"Box "+box(c):"New"}</span></div>${f}</div><div class="face back"><div class="tag"><span>${c.w?"Week "+c.w+", ":""}${esc(c.g)}</span><span>${box(c)?"Box "+box(c):"New"}</span></div>${b}</div></div>
     <div class="acts">${D.on?'<button class="btn miss" id="miss">Missed it</button><button class="btn hit" id="hit">Got it</button>':'<button class="btn go" id="show">Show answer</button>'}</div>
     <div class="row"><button class="tg" id="quit">End session</button></div>`;
     const next=()=>{D.i++;D.on=false;render()};
@@ -115,7 +119,7 @@ function drill(){
     $("#quit").onclick=()=>{D=null;render()};
     return;
   }
-  const t=nextTest(),sc=scopeCards(weeksFor(t)),all=C.filter(visible);
+  const t=nextTest(),sc=scopeCards(weeksFor(t),termOf(t)),all=C.filter(visible);
   const n=a=>a.filter(c=>box(c)>0&&isDue(c)).length;
   app.innerHTML=`<h2 class="h">Drill</h2><p class="sub">Cards you miss come back sooner. Cards you get right come back after a longer gap.</p>
   <div class="opts">
@@ -125,9 +129,9 @@ function drill(){
     <button class="opt" data-s="all"><b>Everything</b><span>${all.length} cards, new ones mixed in</span></button>
     <button class="opt" data-s="rec"><b>Photo recognition</b><span>${all.filter(c=>photos(c).length).length} cards with photos</span></button>
   </div>
-  <div class="row"><button class="tg" id="rev" aria-pressed="${cfg.rev}">Answer first</button><button class="tg" id="zh" aria-pressed="${cfg.zh}">Chinese phrases</button><button class="tg" id="ac" aria-pressed="${cfg.ac}">Aircraft (FTP only)</button><button class="tg" id="rall">Reset all progress</button></div>`;
+  <div class="row"><button class="tg" id="rev" aria-pressed="${cfg.rev}">Answer first</button><button class="tg" id="zh" aria-pressed="${cfg.zh}">Chinese phrases</button><button class="tg" id="ac" aria-pressed="${cfg.ac}">Aircraft (FTP only)</button><button class="tg" id="jobs" aria-pressed="${cfg.jobs}">Career codes</button><button class="tg" id="rall">Reset all progress</button></div>`;
   document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{const s=b.dataset.s;if(s==="rec"){const ph=all.filter(c=>photos(c).length);if(!ph.length)return;D=null;RC={qs:shuffle(ph).slice(0,20).map(c=>buildQ(c,all,true)),i:0,hit:0,pick:null};render();return}startDrill(s==="test"?sc:s==="due"?all.filter(c=>box(c)>0):s==="weak"?all.filter(c=>box(c)===1):all,s==="due")});
-  ["rev","zh","ac"].forEach(k=>$("#"+k).onclick=()=>{cfg[k]=!cfg[k];saveCfg();render()});
+  ["rev","zh","ac","jobs"].forEach(k=>$("#"+k).onclick=()=>{cfg[k]=!cfg[k];saveCfg();render()});
   $("#rall").onclick=()=>{if(confirm("Reset all card progress?")){Object.keys(srs).forEach(k=>delete srs[k]);saveSrs();render()}};
 }
 
@@ -135,7 +139,7 @@ let RS=null;
 function recite(){
   const app=$("#app");
   if(!RS){
-    app.innerHTML=`<h2 class="h">Recite</h2><p class="sub">Say each line out loud first, then reveal it to check yourself.</p><div class="list">${R.map((r,i)=>`<button class="ritem" data-i="${i}">${esc(r.t)}<span>Week ${r.w}${r.l.length?", "+r.l.filter(x=>x[0]!=="#").length+" lines":", check against the guide"}</span></button>`).join("")}</div>`;
+    app.innerHTML=`<h2 class="h">Recite</h2><p class="sub">Say each line out loud first, then reveal it to check yourself.</p><div class="list">${R.map((r,i)=>[r,i]).filter(([r])=>cfg.term==="All"||termOf(r)===cfg.term).map(([r,i])=>`<button class="ritem" data-i="${i}">${esc(r.t)}<span>Week ${r.w}${r.l.length?", "+r.l.filter(x=>x[0]!=="#").length+" lines":", check against the guide"}</span></button>`).join("")}</div>`;
     document.querySelectorAll(".ritem").forEach(b=>b.onclick=()=>{RS={r:R[+b.dataset.i],n:0,hint:false};render()});return;
   }
   const r=RS.r;
@@ -162,7 +166,7 @@ function recite(){
 }
 
 function plan(){
-  const t=nextTest(),sc=scopeCards(weeksFor(t));
+  const t=nextTest(),sc=scopeCards(weeksFor(t),termOf(t));
   const left=Math.max(1,daysBetween(today(),t.d));
   const todo=sc.filter(c=>!mastered(c)).length;
   const rows=SCHED.map(x=>{const dl=daysBetween(today(),x.d);return`<tr class="${x===t?"now":""}"><td>${esc(x.t)}</td><td>${fmt(x.d)}</td><td>${esc(x.f)}</td><td>${dl<0?"Done":dl===0?"Today":dl+" days"}</td></tr>`}).join("");
@@ -185,7 +189,7 @@ const mmss=ms=>{const t=Math.max(0,Math.round(ms/1000));return Math.floor(t/60)+
 const paint=()=>{const e=$("#timer");if(e&&T&&!T.done)e.textContent=mmss(T.end-Date.now())};
 
 function startTest(cards,n,label){
-  const pool=C.filter(visible);
+  const pool=C.filter(baseVis);
   T={qs:shuffle(cards).slice(0,n).map(c=>buildQ(c,pool,Math.random()<.4)),i:0,ans:[],label,start:Date.now(),limit:n*45000,done:false};
   T.end=T.start+T.limit;
   clearInterval(tick);
@@ -207,14 +211,15 @@ function finish(){
 function test(){
   const app=$("#app");
   if(!T){
-    const sets=[["Next test",scopeCards(weeksFor(nextTest()))],["Midterm set",scopeCards([1,2,3,4])],["Final set",scopeCards(WEEKS)],["Everything",C.filter(visible)]];
+    const nt=nextTest(),tm=cfg.term==="All"?termOf(nt):cfg.term;
+    const sets=[["Next test",scopeCards(weeksFor(nt),termOf(nt))],...SCHED.filter(x=>x.big&&termOf(x)===tm).map(x=>[x.t,scopeCards(weeksFor(x),tm)]),["Everything",C.filter(visible)]];
     const n=cfg.tn||20;
     const hist=store.get("wk2_tests",[]);
     app.innerHTML=`<h2 class="h">Test</h2><p class="sub">No feedback until you submit, like the real thing. ${n} questions in ${Math.round(n*.75)} minutes.</p>
     <div class="row">${[10,20,30].map(x=>`<button class="tg" data-n="${x}" aria-pressed="${x===n}">${x} questions</button>`).join("")}</div>
     <div class="opts">${sets.map(([l,cs],i)=>`<button class="opt" data-i="${i}"><b>${l}</b><span>${cs.length} cards</span></button>`).join("")}</div>
     ${hist.length?`<h2 class="h" style="margin-top:22px">Recent scores</h2><div class="tw"><table><tbody>${hist.map(h=>`<tr><td>${fmt(h.d)}</td><td>${esc(h.l)}</td><td>${h.s}/${h.n}</td></tr>`).join("")}</tbody></table></div>`:""}`;
-    document.querySelectorAll(".tg").forEach(b=>b.onclick=()=>{cfg.tn=+b.dataset.n;saveCfg();render()});
+    document.querySelectorAll("#app .tg").forEach(b=>b.onclick=()=>{cfg.tn=+b.dataset.n;saveCfg();render()});
     document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{const [l,cs]=sets[+b.dataset.i];if(cs.length>=4)startTest(cs,Math.min(n,cs.length),l)});
     return;
   }
@@ -245,13 +250,58 @@ function test(){
   paint();
 }
 
-const views={home,drill,test,recite,plan};
+const terms=()=>[...new Set(C.map(termOf))];
+const termLabel=t=>(typeof TERM_LABEL!=="undefined"&&TERM_LABEL[t])||t;
+function termSw(){
+  const el=$("#termsw"),ts=terms();
+  if(ts.length<2){el.innerHTML="";return}
+  el.innerHTML=[...ts,"All"].map(t=>`<button class="tg" data-t="${esc(t)}" aria-pressed="${cfg.term===t}">${esc(t==="All"?"All":termLabel(t))}</button>`).join("");
+  el.querySelectorAll("button").forEach(b=>b.onclick=()=>{cfg.term=b.dataset.t;saveCfg();D=null;RC=null;T=null;RS=null;render()});
+}
+let JOBS=[];
+const JF={sf:false};
+const SF_CODES=new Set(["13A","13S","14N","17D","17S","17X","62E","63A"]);
+const JOB_FIX=[[/Enviromental/g,"Environmental"],[/Resoution/g,"Resolution"],[/Otorlaryngologist/g,"Otorhinolaryngologist"]];
+function loadJobs(){
+  return fetch("afsc.txt").then(r=>r.ok?r.text():"").catch(()=>"").then(t=>{
+    const seen=new Set();
+    t.split(/\r?\n/).forEach(line=>{
+      const i=line.indexOf("#");if(i<1)return;
+      const code=line.slice(0,i).trim().toUpperCase().replace(/^(\d\d[A-Z])O$/,"$10");
+      let title=line.slice(i+1).trim();
+      JOB_FIX.forEach(([a,b])=>{title=title.replace(a,b)});
+      const key=code.replace(/[X0]$/,"");
+      if(!key||seen.has(key))return;
+      seen.add(key);JOBS.push({code:key,title,sf:SF_CODES.has(key)});
+    });
+    JOBS.forEach(j=>{
+      C.push({w:0,g:"AF Officer Codes",q:"AFSC "+j.code,a:j.title,kind:"job"});
+      if(j.sf)C.push({w:0,g:"SF Officer Codes",q:"Space Force "+j.code,a:j.title,kind:"job"});
+    });
+  });
+}
+function jobsView(){
+  const app=$("#app");
+  if(!JOBS.length){app.innerHTML='<h2 class="h">Jobs</h2><p class="note">The job list file was not found. Add afsc.txt next to index.html.</p>';return}
+  app.innerHTML=`<h2 class="h">Jobs</h2><p class="sub">Officer career codes. Space Force officers use many of the same codes. Turn on Career codes in Drill to study them as cards.</p>
+  <div class="row"><input type="search" id="jq" placeholder="Search a code or job title" aria-label="Search jobs"><button class="tg" id="jsf" aria-pressed="${JF.sf}">Space Force only</button></div><div id="jl"></div>`;
+  const draw=()=>{
+    const q=$("#jq").value.trim().toLowerCase();
+    const l=JOBS.filter(j=>(!JF.sf||j.sf)&&(!q||j.code.toLowerCase().includes(q)||j.title.toLowerCase().includes(q)));
+    $("#jl").innerHTML=l.length?`<div class="tw"><table><thead><tr><th>CODE</th><th>JOB</th><th>SERVICE</th></tr></thead><tbody>${l.map(j=>`<tr><td><b>${esc(j.code)}</b></td><td>${esc(j.title)}</td><td>${j.sf?"Air Force, Space Force":"Air Force"}</td></tr>`).join("")}</tbody></table></div>`:'<p class="note">No jobs match.</p>';
+  };
+  $("#jq").oninput=draw;
+  $("#jsf").onclick=()=>{JF.sf=!JF.sf;$("#jsf").setAttribute("aria-pressed",JF.sf);draw()};
+  draw();
+}
+const views={home,drill,test,recite,plan,jobs:jobsView};
 function render(){
   const r=views[location.hash.slice(1)]?location.hash.slice(1):"home";
   document.querySelectorAll("#nav a").forEach(a=>a.getAttribute("data-r")===r?a.setAttribute("aria-current","page"):a.removeAttribute("aria-current"));
   const s=streak();$("#streak").textContent=s?s+" day streak":"No streak yet";
   if(r!=="test")clearInterval(tick);
   views[r]();
+  termSw();
 }
 window.addEventListener("hashchange",()=>{D=D&&location.hash==="#drill"?D:null;RC=RC&&location.hash==="#drill"?RC:null;T=T&&location.hash==="#test"?T:null;RS=null;render()});
 document.addEventListener("keydown",e=>{
@@ -261,4 +311,5 @@ document.addEventListener("keydown",e=>{
   else if(D.on&&e.key==="1"){rate(c,false);D.miss++;D.q.splice(Math.min(D.q.length,D.i+4),0,c);D.i++;D.on=false;render()}
   else if(D.on&&e.key==="2"){rate(c,true);D.hit++;D.i++;D.on=false;render()}
 });
-render();
+if(!["All",...terms()].includes(cfg.term)){cfg.term=terms().length>1?termOf(nextTest()):"All";saveCfg()}
+loadJobs().then(render);

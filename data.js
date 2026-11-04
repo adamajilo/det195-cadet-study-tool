@@ -15,9 +15,11 @@ const SCHED = [
 const WEEKS = [1, 2, 3, 4, 6, 7, 8];
 
 const C = [];
+let TERM = "Fall";
+const TERM_LABEL = { Fall: "Fall 2026", Spring: "Spring 2027" };
 
 const add = (w, g, list, kind) =>
-  list.forEach(([q, a]) => C.push({ w, g, q, a, kind: kind || "" }));
+  list.forEach(([q, a]) => C.push({ w, g, q, a, kind: kind || "", term: TERM }));
 
 // WEEK 1
 
@@ -620,5 +622,38 @@ const IMG = {
     "O-8": "images/spaceforcerank/o8.webp",
     "O-9": "images/spaceforcerank/o9.webp",
     "O-10": "images/spaceforcerank/o10.webp"
-  }
+  },
+
+  "Aircraft": {
+  "F-15/E/EX": "images/aircraft/f-15-e-ex.webp",
+  "F-16": "images/aircraft/f-16.webp",
+  "F-22": "images/aircraft/f-22.webp",
+  "F-35": "images/aircraft/f-35.webp",
+  "A-10": "images/aircraft/a-10.webp",
+  "AC-130J": "images/aircraft/ac-130j.webp",
+  "B-1": "images/aircraft/b-1.webp",
+  "B-2": "images/aircraft/b-2.webp",
+  "B-52": "images/aircraft/b-52.webp",
+  "E-3": "images/aircraft/e-3.webp",
+  "E-4": "images/aircraft/e-4.webp",
+  "EC-130H/J": "images/aircraft/ec-130h-j.webp",
+  "EA-37B": "images/aircraft/ea-37b.webp",
+  "RC-135": "images/aircraft/rc-135.webp",
+  "U-2": "images/aircraft/u-2.webp",
+  "U-28A": "images/aircraft/u-28a.webp",
+  "MC-12W": "images/aircraft/mc-12w.webp",
+  "KC-46": "images/aircraft/kc-46.webp",
+  "KC-135": "images/aircraft/kc-135.webp",
+  "HC-130J": "images/aircraft/hc-130j.webp",
+  "MC-130J": "images/aircraft/mc-130j.webp",
+  "C-130H/J": "images/aircraft/c-130h-j.webp",
+  "C-17": "images/aircraft/c-17.webp",
+  "C-5": "images/aircraft/c-5.webp",
+  "HH-60W": "images/aircraft/hh-60w.webp",
+  "UH-1N": "images/aircraft/uh-1n.webp",
+  "CV-22B": "images/aircraft/cv-22b.webp",
+  "MQ-9": "images/aircraft/mq-9.webp",
+  "RQ-4": "images/aircraft/rq-4.webp",
+  "RQ-170": "images/aircraft/rq-170.webp"
+ }
 };
