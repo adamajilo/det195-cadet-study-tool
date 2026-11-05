@@ -224,24 +224,50 @@ function finish(){
   T.done=true;render();
 }
 
+const TS={mode:"sets",set:0,weeks:new Set(),topics:new Set()};
+function setupView(){
+  const app=$("#app");
+  const nt=nextTest(),tm=cfg.term==="All"?termOf(nt):cfg.term;
+  const sets=[["Next test",scopeCards(weeksFor(nt),termOf(nt))],...SCHED.filter(x=>x.big&&termOf(x)===tm).map(x=>[x.t,scopeCards(weeksFor(x),tm)]),["Everything",C.filter(visible)]];
+  const vis=C.filter(visible);
+  const weeks=[...new Set(vis.filter(c=>c.kind!=="job").map(c=>c.w))].sort((a,b)=>a-b);
+  const tops=[...new Map(vis.map(c=>[gk(c),c])).values()].sort((a,b)=>a.w-b.w||a.g.localeCompare(b.g));
+  const n=cfg.tn||20;
+  const pk=cs=>cfg.typed?cs.filter(canType):cs;
+  if(TS.set>=sets.length)TS.set=0;
+  let pool,label;
+  if(TS.mode==="weeks"){pool=vis.filter(c=>c.kind!=="job"&&TS.weeks.has(c.w));label="Weeks "+[...TS.weeks].sort((a,b)=>a-b).join(", ")}
+  else if(TS.mode==="topics"){pool=vis.filter(c=>TS.topics.has(gk(c)));const f=tops.find(c=>TS.topics.has(gk(c)));label=f&&TS.topics.size===1?f.g:TS.topics.size+" topics"}
+  else{label=sets[TS.set][0];pool=sets[TS.set][1]}
+  pool=pk(pool);
+  const hist=store.get("wk2_tests",[]);
+  const panel=TS.mode==="weeks"
+    ?`<div class="row">${weeks.map(w=>`<button class="tg" data-w="${w}" aria-pressed="${TS.weeks.has(w)}">${w?"Week "+w:"No week"}</button>`).join("")}<button class="tg" id="clr">Clear</button></div>`
+    :TS.mode==="topics"
+    ?`<div class="chips">${tops.map(c=>`<button class="tg" data-t="${esc(gk(c))}" aria-pressed="${TS.topics.has(gk(c))}">${esc(c.g)} <small>${c.w?"Week "+c.w:"Reference"}</small></button>`).join("")}</div><div class="row"><button class="tg" id="clr">Clear</button></div>`
+    :`<div class="row">${sets.map(([l,cs],i)=>`<button class="tg" data-s="${i}" aria-pressed="${i===TS.set}">${esc(l)} (${pk(cs).length})</button>`).join("")}</div>`;
+  app.innerHTML=`<h2 class="h">Test</h2><p class="sub">No feedback until you submit, like the real thing. ${Math.min(n,pool.length||n)} questions in ${Math.round(Math.min(n,pool.length||n)*.75)} minutes.</p>
+  <div class="srow"><span class="lbl">Format</span><button class="tg" data-f="mc" aria-pressed="${!cfg.typed}">Multiple choice</button><button class="tg" data-f="ty" aria-pressed="${!!cfg.typed}">Typed answers</button></div>
+  ${cfg.typed?'<p class="note">Capital letters and punctuation do not matter, but spelling does. Long answers like the Code of Conduct are left out because they are too long to type.</p>':""}
+  <div class="srow"><span class="lbl">Questions</span>${[10,20,30].map(x=>`<button class="tg" data-n="${x}" aria-pressed="${x===n}">${x}</button>`).join("")}</div>
+  <div class="srow"><span class="lbl">Cover</span><button class="tg" data-m="sets" aria-pressed="${TS.mode==="sets"}">Quick sets</button><button class="tg" data-m="weeks" aria-pressed="${TS.mode==="weeks"}">By week</button><button class="tg" data-m="topics" aria-pressed="${TS.mode==="topics"}">By topic</button></div>
+  ${panel}
+  <div class="srow"><button class="btn go" id="start" ${pool.length<4?"disabled":""}>Start test</button><span class="sub" style="margin:0">${pool.length} cards available${pool.length&&pool.length<4?", need at least 4":""}</span></div>
+  ${hist.length?`<details class="det"><summary>Recent scores</summary><div class="tw"><table><tbody>${hist.map(h=>`<tr><td>${fmt(h.d)}</td><td>${esc(h.l)}</td><td>${h.s}/${h.n}</td></tr>`).join("")}</tbody></table></div></details>`:""}`;
+  const go=()=>render();
+  document.querySelectorAll("#app [data-f]").forEach(b=>b.onclick=()=>{cfg.typed=b.dataset.f==="ty";saveCfg();go()});
+  document.querySelectorAll("#app [data-n]").forEach(b=>b.onclick=()=>{cfg.tn=+b.dataset.n;saveCfg();go()});
+  document.querySelectorAll("#app [data-m]").forEach(b=>b.onclick=()=>{TS.mode=b.dataset.m;go()});
+  document.querySelectorAll("#app [data-s]").forEach(b=>b.onclick=()=>{TS.set=+b.dataset.s;go()});
+  document.querySelectorAll("#app [data-w]").forEach(b=>b.onclick=()=>{const w=+b.dataset.w;TS.weeks.has(w)?TS.weeks.delete(w):TS.weeks.add(w);go()});
+  document.querySelectorAll("#app [data-t]").forEach(b=>b.onclick=()=>{const k=b.dataset.t;TS.topics.has(k)?TS.topics.delete(k):TS.topics.add(k);go()});
+  if($("#clr"))$("#clr").onclick=()=>{TS.weeks.clear();TS.topics.clear();go()};
+  $("#start").onclick=()=>{if(pool.length>=4)startTest(pool,Math.min(n,pool.length),label,cfg.typed)};
+}
+
 function test(){
   const app=$("#app");
-  if(!T){
-    const nt=nextTest(),tm=cfg.term==="All"?termOf(nt):cfg.term;
-    const sets=[["Next test",scopeCards(weeksFor(nt),termOf(nt))],...SCHED.filter(x=>x.big&&termOf(x)===tm).map(x=>[x.t,scopeCards(weeksFor(x),tm)]),["Everything",C.filter(visible)]];
-    const n=cfg.tn||20;
-    const pk=cs=>cfg.typed?cs.filter(canType):cs;
-    const hist=store.get("wk2_tests",[]);
-    app.innerHTML=`<h2 class="h">Test</h2><p class="sub">No feedback until you submit, like the real thing. ${n} questions in ${Math.round(n*.75)} minutes.</p>
-    <div class="row"><button class="tg" data-f="mc" aria-pressed="${!cfg.typed}">Multiple choice</button><button class="tg" data-f="ty" aria-pressed="${!!cfg.typed}">Typed answers</button></div>${cfg.typed?'<p class="note">Capital letters and punctuation do not matter, but spelling does. Long answers like the Code of Conduct are left out because they are too long to type.</p>':""}
-    <div class="row">${[10,20,30].map(x=>`<button class="tg" data-n="${x}" aria-pressed="${x===n}">${x} questions</button>`).join("")}</div>
-    <div class="opts">${sets.map(([l,cs],i)=>`<button class="opt" data-i="${i}"><b>${l}</b><span>${pk(cs).length} cards</span></button>`).join("")}</div>
-    ${hist.length?`<h2 class="h" style="margin-top:22px">Recent scores</h2><div class="tw"><table><tbody>${hist.map(h=>`<tr><td>${fmt(h.d)}</td><td>${esc(h.l)}</td><td>${h.s}/${h.n}</td></tr>`).join("")}</tbody></table></div>`:""}`;
-    document.querySelectorAll("#app .tg[data-n]").forEach(b=>b.onclick=()=>{cfg.tn=+b.dataset.n;saveCfg();render()});
-    document.querySelectorAll("#app .tg[data-f]").forEach(b=>b.onclick=()=>{cfg.typed=b.dataset.f==="ty";saveCfg();render()});
-    document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{const [l,cs]=sets[+b.dataset.i];const p=pk(cs);if(p.length>=4)startTest(p,Math.min(n,p.length),l,cfg.typed)});
-    return;
-  }
+  if(!T){setupView();return}
   if(T.done){
     const n=T.qs.length,s=T.res.filter(Boolean).length,pct=Math.round(s/n*100);
     const by={};T.qs.forEach((q,j)=>{const g=q.c.g;by[g]=by[g]||[0,0];by[g][1]++;if(T.res[j])by[g][0]++});
