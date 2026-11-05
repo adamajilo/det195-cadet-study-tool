@@ -835,6 +835,10 @@ button:disabled {
     grid-template-columns: 1fr
 }
 
+.ti{width:100%;font:1.1rem var(--b);padding:14px 16px;border:2px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);margin-top:4px}
+.ti:focus{border-color:var(--accent)}
+
+
 :root{--soft:#eef2f6}
 @media (prefers-color-scheme:dark){:root{--soft:#1d2b40}}
 .termsw{display:flex;gap:6px}
