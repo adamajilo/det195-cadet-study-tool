@@ -69,7 +69,8 @@ function home(){
   const tiles=[...new Set(all.map(gk))].map(g=>{
     const cs=all.filter(c=>gk(c)===g);
     const bx=[0,1,2,3,4,5].map(n=>cs.filter(c=>box(c)===n).length);
-    return`<button class="tile" data-g="${esc(g)}"><b>${esc(cs[0].g)}</b><span>${cfg.term==="All"&&terms().length>1&&cs[0].kind!=="job"?termLabel(termOf(cs[0]))+", ":""}${cs[0].w?"Week "+cs[0].w+", ":"Reference, "}${cs.length} cards, ${bx[4]+bx[5]} mastered</span><i class="seg">${bx.map((n,i)=>`<u class="b${i}" style="flex:${n}"></u>`).join("")}</i></button>`;
+    const done=cs.length>0&&bx[4]+bx[5]===cs.length;
+    return`<button class="tile${done?" cleared":""}" data-g="${esc(g)}">${done?'<em class="stamp">Cleared</em>':""}<b>${esc(cs[0].g)}</b><span>${cfg.term==="All"&&terms().length>1&&cs[0].kind!=="job"?termLabel(termOf(cs[0]))+", ":""}${cs[0].w?"Week "+cs[0].w+", ":"Reference, "}${cs.length} cards, ${bx[4]+bx[5]} mastered</span><i class="seg">${bx.map((n,i)=>`<u class="b${i}" style="flex:${n}"></u>`).join("")}</i></button>`;
   }).join("");
   $("#app").innerHTML=`
   <section class="hero"><div><p class="kick">UP NEXT</p><h2>${esc(t.t)}</h2><p>${left===0?"Today":left+(left===1?" day":" days")} away, ${fmt(t.d)}. ${esc(t.f)}</p></div><button class="btn go" id="goTest">Study this test</button></section>
@@ -188,9 +189,24 @@ const qPrompt=q=>q.img?shots(q.c,true)+'<p class="ft">Who or what is this?</p>':
 const mmss=ms=>{const t=Math.max(0,Math.round(ms/1000));return Math.floor(t/60)+":"+String(t%60).padStart(2,"0")};
 const paint=()=>{const e=$("#timer");if(e&&T&&!T.done)e.textContent=mmss(T.end-Date.now())};
 
-function startTest(cards,n,label){
+const TYPED_MAX=60;
+const norm=x=>String(x).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9\u4e00-\u9fff]/g,"");
+const canType=c=>{const L=c.a.split("\n");return L[0].length<=TYPED_MAX&&(c.kind==="zh"||L.slice(1).every(l=>l.trim().startsWith("/")))};
+const accepted=c=>{
+  const set=new Set();const L=c.a.split("\n");
+  (c.kind==="zh"?L:[L[0]]).forEach(line=>{
+    const v=[line,line.replace(/\s*\([^)]*\)/g,"")];
+    const m=line.match(/\(([^)]*)\)\s*\*?\s*$/);
+    if(m&&/^[A-Za-z0-9\/\- ]{2,12}$/.test(m[1]))v.push(m[1]);
+    v.forEach(x=>{const k=norm(x);if(k)set.add(k)});
+  });
+  return set;
+};
+const typedMatch=(x,c)=>{const k=norm(x||"");return !!k&&accepted(c).has(k)};
+
+function startTest(cards,n,label,typed){
   const pool=C.filter(baseVis);
-  T={qs:shuffle(cards).slice(0,n).map(c=>buildQ(c,pool,Math.random()<.4)),i:0,ans:[],label,start:Date.now(),limit:n*45000,done:false};
+  T={qs:shuffle(cards).slice(0,n).map(c=>{const q=buildQ(c,pool,Math.random()<.4);if(typed)q.right=c.a.split("\n").filter(l=>!l.trim().startsWith("/")).join(" / ");return q}),i:0,ans:[],label:typed?label+" (typed)":label,typed:!!typed,start:Date.now(),limit:n*45000,done:false};
   T.end=T.start+T.limit;
   clearInterval(tick);
   tick=setInterval(()=>{if(T.end-Date.now()<=0)finish();else paint()},500);
@@ -200,7 +216,8 @@ function finish(){
   if(!T||T.done)return;
   clearInterval(tick);
   T.used=Math.min(T.limit,Date.now()-T.start);
-  T.res=T.qs.map((q,j)=>T.ans[j]!=null&&q.opts[T.ans[j]]===q.right);
+  T.res=T.qs.map((q,j)=>T.typed?typedMatch(T.ans[j],q.c):T.ans[j]!=null&&q.opts[T.ans[j]]===q.right);
+  if(T.typed)T.qs.forEach((q,j)=>{q.typed=T.ans[j]});
   T.res.forEach((ok,j)=>rate(T.qs[j].c,ok));
   const h=store.get("wk2_tests",[]);
   h.unshift({d:today(),l:T.label,s:T.res.filter(Boolean).length,n:T.qs.length});
@@ -208,45 +225,75 @@ function finish(){
   T.done=true;render();
 }
 
+const TS={mode:"sets",set:0,weeks:new Set(),topics:new Set()};
+function setupView(){
+  const app=$("#app");
+  const nt=nextTest(),tm=cfg.term==="All"?termOf(nt):cfg.term;
+  const sets=[["Next test",scopeCards(weeksFor(nt),termOf(nt))],...SCHED.filter(x=>x.big&&termOf(x)===tm).map(x=>[x.t,scopeCards(weeksFor(x),tm)]),["Everything",C.filter(visible)]];
+  const vis=C.filter(visible);
+  const weeks=[...new Set(vis.filter(c=>c.kind!=="job").map(c=>c.w))].sort((a,b)=>a-b);
+  const tops=[...new Map(vis.map(c=>[gk(c),c])).values()].sort((a,b)=>a.w-b.w||a.g.localeCompare(b.g));
+  const n=cfg.tn||20;
+  const pk=cs=>cfg.typed?cs.filter(canType):cs;
+  if(TS.set>=sets.length)TS.set=0;
+  let pool,label;
+  if(TS.mode==="weeks"){pool=vis.filter(c=>c.kind!=="job"&&TS.weeks.has(c.w));label="Weeks "+[...TS.weeks].sort((a,b)=>a-b).join(", ")}
+  else if(TS.mode==="topics"){pool=vis.filter(c=>TS.topics.has(gk(c)));const f=tops.find(c=>TS.topics.has(gk(c)));label=f&&TS.topics.size===1?f.g:TS.topics.size+" topics"}
+  else{label=sets[TS.set][0];pool=sets[TS.set][1]}
+  pool=pk(pool);
+  const hist=store.get("wk2_tests",[]);
+  const panel=TS.mode==="weeks"
+    ?`<div class="row">${weeks.map(w=>`<button class="tg" data-w="${w}" aria-pressed="${TS.weeks.has(w)}">${w?"Week "+w:"No week"}</button>`).join("")}<button class="tg" id="clr">Clear</button></div>`
+    :TS.mode==="topics"
+    ?`<div class="chips">${tops.map(c=>`<button class="tg" data-t="${esc(gk(c))}" aria-pressed="${TS.topics.has(gk(c))}">${esc(c.g)} <small>${c.w?"Week "+c.w:"Reference"}</small></button>`).join("")}</div><div class="row"><button class="tg" id="clr">Clear</button></div>`
+    :`<div class="row">${sets.map(([l,cs],i)=>`<button class="tg" data-s="${i}" aria-pressed="${i===TS.set}">${esc(l)} (${pk(cs).length})</button>`).join("")}</div>`;
+  app.innerHTML=`<h2 class="h">Test</h2><p class="sub">No feedback until you submit, like the real thing. ${Math.min(n,pool.length||n)} questions in ${Math.round(Math.min(n,pool.length||n)*.75)} minutes.</p>
+  <div class="srow"><span class="lbl">Format</span><button class="tg" data-f="mc" aria-pressed="${!cfg.typed}">Multiple choice</button><button class="tg" data-f="ty" aria-pressed="${!!cfg.typed}">Typed answers</button></div>
+  ${cfg.typed?'<p class="note">Capital letters and punctuation do not matter, but spelling does. Long answers like the Code of Conduct are left out because they are too long to type.</p>':""}
+  <div class="srow"><span class="lbl">Questions</span>${[10,20,30].map(x=>`<button class="tg" data-n="${x}" aria-pressed="${x===n}">${x}</button>`).join("")}</div>
+  <div class="srow"><span class="lbl">Cover</span><button class="tg" data-m="sets" aria-pressed="${TS.mode==="sets"}">Quick sets</button><button class="tg" data-m="weeks" aria-pressed="${TS.mode==="weeks"}">By week</button><button class="tg" data-m="topics" aria-pressed="${TS.mode==="topics"}">By topic</button></div>
+  ${panel}
+  <div class="srow"><button class="btn go" id="start" ${pool.length<4?"disabled":""}>Start test</button><span class="sub" style="margin:0">${pool.length} cards available${pool.length&&pool.length<4?", need at least 4":""}</span></div>
+  ${hist.length?`<details class="det"><summary>Recent scores</summary><div class="tw"><table><tbody>${hist.map(h=>`<tr><td>${fmt(h.d)}</td><td>${esc(h.l)}</td><td>${h.s}/${h.n}</td></tr>`).join("")}</tbody></table></div></details>`:""}`;
+  const go=()=>render();
+  document.querySelectorAll("#app [data-f]").forEach(b=>b.onclick=()=>{cfg.typed=b.dataset.f==="ty";saveCfg();go()});
+  document.querySelectorAll("#app [data-n]").forEach(b=>b.onclick=()=>{cfg.tn=+b.dataset.n;saveCfg();go()});
+  document.querySelectorAll("#app [data-m]").forEach(b=>b.onclick=()=>{TS.mode=b.dataset.m;go()});
+  document.querySelectorAll("#app [data-s]").forEach(b=>b.onclick=()=>{TS.set=+b.dataset.s;go()});
+  document.querySelectorAll("#app [data-w]").forEach(b=>b.onclick=()=>{const w=+b.dataset.w;TS.weeks.has(w)?TS.weeks.delete(w):TS.weeks.add(w);go()});
+  document.querySelectorAll("#app [data-t]").forEach(b=>b.onclick=()=>{const k=b.dataset.t;TS.topics.has(k)?TS.topics.delete(k):TS.topics.add(k);go()});
+  if($("#clr"))$("#clr").onclick=()=>{TS.weeks.clear();TS.topics.clear();go()};
+  $("#start").onclick=()=>{if(pool.length>=4)startTest(pool,Math.min(n,pool.length),label,cfg.typed)};
+}
+
 function test(){
   const app=$("#app");
-  if(!T){
-    const nt=nextTest(),tm=cfg.term==="All"?termOf(nt):cfg.term;
-    const sets=[["Next test",scopeCards(weeksFor(nt),termOf(nt))],...SCHED.filter(x=>x.big&&termOf(x)===tm).map(x=>[x.t,scopeCards(weeksFor(x),tm)]),["Everything",C.filter(visible)]];
-    const n=cfg.tn||20;
-    const hist=store.get("wk2_tests",[]);
-    app.innerHTML=`<h2 class="h">Test</h2><p class="sub">No feedback until you submit, like the real thing. ${n} questions in ${Math.round(n*.75)} minutes.</p>
-    <div class="row">${[10,20,30].map(x=>`<button class="tg" data-n="${x}" aria-pressed="${x===n}">${x} questions</button>`).join("")}</div>
-    <div class="opts">${sets.map(([l,cs],i)=>`<button class="opt" data-i="${i}"><b>${l}</b><span>${cs.length} cards</span></button>`).join("")}</div>
-    ${hist.length?`<h2 class="h" style="margin-top:22px">Recent scores</h2><div class="tw"><table><tbody>${hist.map(h=>`<tr><td>${fmt(h.d)}</td><td>${esc(h.l)}</td><td>${h.s}/${h.n}</td></tr>`).join("")}</tbody></table></div>`:""}`;
-    document.querySelectorAll("#app .tg").forEach(b=>b.onclick=()=>{cfg.tn=+b.dataset.n;saveCfg();render()});
-    document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{const [l,cs]=sets[+b.dataset.i];if(cs.length>=4)startTest(cs,Math.min(n,cs.length),l)});
-    return;
-  }
+  if(!T){setupView();return}
   if(T.done){
     const n=T.qs.length,s=T.res.filter(Boolean).length,pct=Math.round(s/n*100);
     const by={};T.qs.forEach((q,j)=>{const g=q.c.g;by[g]=by[g]||[0,0];by[g][1]++;if(T.res[j])by[g][0]++});
     const missed=T.qs.filter((q,j)=>!T.res[j]);
     app.innerHTML=`<div class="done"><b>${s}/${n}</b><p>${pct}%, finished in ${mmss(T.used)}</p></div>
     <h2 class="h" style="margin-top:22px">By topic</h2><div class="tw"><table><tbody>${Object.entries(by).map(([g,v])=>`<tr><td>${esc(g)}</td><td>${v[0]}/${v[1]}</td></tr>`).join("")}</tbody></table></div>
-    ${missed.length?`<h2 class="h" style="margin-top:22px">Missed</h2><div class="rows">${missed.map(q=>`<div class="miss-item">${q.img?shots(q.c):`<b>${esc(q.c.q)}</b>`}<p>Correct: ${esc(q.right)}</p></div>`).join("")}</div>`:""}
+    ${missed.length?`<h2 class="h" style="margin-top:22px">Missed</h2><div class="rows">${missed.map(q=>`<div class="miss-item">${q.img?shots(q.c):`<b>${esc(q.c.q)}</b>`}<p>Correct: ${esc(q.right)}${q.typed?`<br>You typed: ${esc(q.typed)}`:""}</p></div>`).join("")}</div>`:""}
     <div class="acts" style="margin-top:18px">${missed.length?'<button class="btn go" id="retry">Retry missed</button>':""}<button class="btn" id="newt">New test</button><button class="btn" id="toHome">Home</button></div>`;
-    if(missed.length)$("#retry").onclick=()=>startTest(missed.map(q=>q.c),missed.length,"Retry missed");
+    if(missed.length)$("#retry").onclick=()=>startTest(missed.map(q=>q.c),missed.length,"Retry missed",T.typed);
     $("#newt").onclick=()=>{T=null;render()};
     $("#toHome").onclick=()=>{T=null;location.hash="home"};
     return;
   }
   const q=T.qs[T.i],n=T.qs.length;
   app.innerHTML=`<div class="row"><span class="timer" id="timer"></span><span class="sub" style="margin:0">Question ${T.i+1} of ${n}</span></div>
-  <div class="qnav">${T.qs.map((_,j)=>`<button data-j="${j}" class="${T.ans[j]!=null?"filled":""} ${j===T.i?"cur":""}">${j+1}</button>`).join("")}</div>
+  <div class="qnav">${T.qs.map((_,j)=>`<button data-j="${j}" class="${T.ans[j]!=null&&T.ans[j]!==""?"filled":""} ${j===T.i?"cur":""}">${j+1}</button>`).join("")}</div>
   <div class="qcard">${qPrompt(q)}</div>
-  <div class="opts">${q.opts.map((o,j)=>`<button class="ans ${T.ans[T.i]===j?"sel":""}" data-j="${j}">${esc(o)}</button>`).join("")}</div>
+  ${T.typed?`<input type="text" id="ti" class="ti" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type your answer" aria-label="Your answer" value="${esc(T.ans[T.i]||"")}">`:`<div class="opts">${q.opts.map((o,j)=>`<button class="ans ${T.ans[T.i]===j?"sel":""}" data-j="${j}">${esc(o)}</button>`).join("")}</div>`}
   <div class="acts" style="margin-top:14px"><button class="btn" id="pv" ${T.i?"":"disabled"}>Previous</button><button class="btn" id="nx" ${T.i<n-1?"":"disabled"}>Next</button><button class="btn go" id="sub">Submit test</button></div>`;
   document.querySelectorAll(".ans").forEach(b=>b.onclick=()=>{T.ans[T.i]=+b.dataset.j;render()});
+  if(T.typed){const ti=$("#ti");ti.oninput=()=>{T.ans[T.i]=ti.value};ti.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();if(T.i<n-1){T.i++;render()}else $("#sub").focus()}};ti.focus()}
   document.querySelectorAll(".qnav button").forEach(b=>b.onclick=()=>{T.i=+b.dataset.j;render()});
   $("#pv").onclick=()=>{T.i--;render()};
   $("#nx").onclick=()=>{T.i++;render()};
-  $("#sub").onclick=()=>{const left=n-T.ans.filter(x=>x!=null).length;if(!left||confirm(left+" unanswered. Submit anyway?"))finish()};
+  $("#sub").onclick=()=>{const left=n-T.ans.filter(x=>x!=null&&x!=="").length;if(!left||confirm(left+" unanswered. Submit anyway?"))finish()};
   paint();
 }
 
@@ -294,11 +341,25 @@ function jobsView(){
   $("#jsf").onclick=()=>{JF.sf=!JF.sf;$("#jsf").setAttribute("aria-pressed",JF.sf);draw()};
   draw();
 }
+const RANKS=[[45,"Cadet Colonel",[2,2,2,2]],[30,"Cadet Lieutenant Colonel",[2,2,2]],[21,"Cadet Major",[3,1.4,3]],[14,"Cadet Captain",[2.4,2.4]],[7,"Cadet First Lieutenant",[1.4,3]],[3,"Cadet Second Lieutenant",[3]]];
+const rankFor=n=>RANKS.find(r=>n>=r[0]);
+const nextRank=r=>RANKS[RANKS.indexOf(r)-1];
+function rankIcon(r){
+  const bars=r[2],gap=2.2,total=bars.reduce((a,b)=>a+b,0)+gap*(bars.length-1);
+  let y=(24-total)/2;
+  const rects=bars.map(h=>{const o=`<rect x="5" y="${y.toFixed(2)}" width="14" height="${h}" rx=".6" fill="#dfe5ec"/>`;y+=h+gap;return o}).join("");
+  return`<svg class="rank-icon" viewBox="0 0 24 24" role="img" aria-label="${esc(r[1])}"><rect x="1.5" y="1.5" width="21" height="21" rx="3" fill="#0b0f14" stroke="#3a4656"/>${rects}</svg>`;
+}
+//to simulate and check if streak works
+//fake=n=>{days.length=0;for(let i=0;i<n;i++){const d=new Date();d.setDate(d.getDate()-i);days.push(ymd(d))}render()}
+//fake(number)
 const views={home,drill,test,recite,plan,jobs:jobsView};
 function render(){
   const r=views[location.hash.slice(1)]?location.hash.slice(1):"home";
   document.querySelectorAll("#nav a").forEach(a=>a.getAttribute("data-r")===r?a.setAttribute("aria-current","page"):a.removeAttribute("aria-current"));
-  const s=streak();$("#streak").textContent=s?s+" day streak":"No streak yet";
+  const s=streak(),rk=rankFor(s),el=$("#streak");
+  el.innerHTML=(rk?rankIcon(rk)+" ":"")+esc(s?s+" day streak":"No streak yet");
+  el.title=rk?rk[1]+" streak rank"+(nextRank(rk)?". Next rank at "+nextRank(rk)[0]+" days.":"."):"";
   if(r!=="test")clearInterval(tick);
   views[r]();
   termSw();
@@ -311,5 +372,16 @@ document.addEventListener("keydown",e=>{
   else if(D.on&&e.key==="1"){rate(c,false);D.miss++;D.q.splice(Math.min(D.q.length,D.i+4),0,c);D.i++;D.on=false;render()}
   else if(D.on&&e.key==="2"){rate(c,true);D.hit++;D.i++;D.on=false;render()}
 });
+const baseTitle=document.title;
+document.addEventListener("visibilitychange",()=>{document.title=document.hidden?"Cadet, come back":baseTitle});
+console.log("%cBriefing Room","font:700 20px sans-serif;color:#ff5a36","Built for Det 195. Found something? Good. Now go study.");
+function toast(m){const t=document.createElement("div");t.className="toast";t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2200)}
+function setNight(on){if(on)document.documentElement.dataset.theme="night";else delete document.documentElement.dataset.theme;cfg.night=on;saveCfg()}
+if(cfg.night)document.documentElement.dataset.theme="night";
+(function(){
+  const b=document.querySelector(".brand");if(!b)return;
+  let n=0,t=0;
+  b.addEventListener("click",()=>{const now=Date.now();n=now-t<1500?n+1:1;t=now;if(n>=5){n=0;const on=!cfg.night;setNight(on);toast(on?"Night ops on":"Night ops off")}});
+})();
 if(!["All",...terms()].includes(cfg.term)){cfg.term=terms().length>1?termOf(nextTest()):"All";saveCfg()}
 loadJobs().then(render);

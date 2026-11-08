@@ -244,6 +244,19 @@ main {
     font-size: .86rem
 }
 
+.chip-streak{display:inline-flex;align-items:center;gap:7px}
+.rank-icon{width:22px;height:22px;flex:none}
+.tile{position:relative}
+.tile.cleared{border-color:#d4a72c;box-shadow:inset 0 0 0 2px #d4a72c}
+.stamp{position:absolute;top:-10px;right:12px;font:700 .8rem var(--d);font-style:normal;letter-spacing:.08em;text-transform:uppercase;color:#6b4e00;background:#f6d77a;border-radius:6px;padding:2px 9px;transform:rotate(6deg)}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--bar);color:var(--bar-ink);padding:10px 18px;border-radius:999px;font-weight:700;z-index:20;box-shadow:0 6px 20px rgba(0,0,0,.3)}
+:root[data-theme="night"]{--bg:#050000;--surface:#0d0303;--card:#140505;--ink:#ff6b5e;--muted:#b04a42;--line:#3a0f0c;--bar:#000;--bar-ink:#ff6b5e;--accent:#ff3b2f;--accent-ink:#000;--good:#ffb347;--bad:#ff2a1a;--b0:#3a0f0c;--b1:#7a1610;--b2:#b3261a;--b3:#e0541f;--b4:#ff8a3d;--b5:#ffc04d;color-scheme:dark}
+:root[data-theme="night"] img{filter:grayscale(1) sepia(1) saturate(5) hue-rotate(-50deg) brightness(.8)}
+:root[data-theme="night"] .btn.hit,:root[data-theme="night"] .btn.go{color:#000}
+:root[data-theme="night"] .brand small,:root[data-theme="night"] .nav a,:root[data-theme="night"] .hero p{color:#b04a42}
+:root[data-theme="night"] .nav a[aria-current=page]{color:#ff6b5e}
+:root[data-theme="night"] .chip-streak{background:#1a0606}
+
 .seg {
     display: flex;
     height: 8px;
