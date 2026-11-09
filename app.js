@@ -1,3 +1,4 @@
+
 const $=(s,r=document)=>r.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
 const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
@@ -21,6 +22,22 @@ const saveSrs=()=>{store.set("wk2_srs",srs);ping()};
 function touchDay(){const t=today();if(!days.includes(t)){days.push(t);store.set("wk2_days",days.slice(-90));ping()}}
 function streak(){let n=0;const d=new Date();if(!days.includes(ymd(d)))d.setDate(d.getDate()-1);while(days.includes(ymd(d))){n++;d.setDate(d.getDate()-1)}return n}
 
+// Lifetime XP initialization.
+// Existing weekly XP becomes the starting lifetime XP baseline.
+const initialWeeklyXp=store.get("wk2_xp",{weekId:"",xp:0});
+let initialTotalXp=store.get("wk2_total_xp",null);
+
+if(initialTotalXp===null||!Number.isFinite(Number(initialTotalXp))){
+  initialTotalXp=Math.max(0,Number(initialWeeklyXp.xp)||0);
+  store.set("wk2_total_xp",initialTotalXp);
+}else{
+  initialTotalXp=Math.max(0,Number(initialTotalXp)||0);
+  store.set("wk2_total_xp",initialTotalXp);
+}
+
+// Expose lifetime XP for sync.js.
+window.getTotalXp=()=>Math.max(0,Number(store.get("wk2_total_xp",0))||0);
+
 const baseVis=c=>(cfg.zh||c.kind!=="zh")&&(cfg.jobs||c.kind!=="job")&&(cfg.ac||(c.kind!=="ac"&&c.g!=="Aircraft"));
 const visible=c=>baseVis(c)&&(cfg.term==="All"||termOf(c)===cfg.term||c.kind==="job");
 const weeksIn=tm=>[...new Set(C.filter(c=>termOf(c)===tm&&c.kind!=="job").map(c=>c.w))].sort((a,b)=>a-b);
@@ -31,51 +48,64 @@ const box=c=>(srs[keyOf(c)]||{b:0}).b;
 const isDue=c=>{const s=srs[keyOf(c)];return !s||s.d<=today()};
 const mastered=c=>box(c)>=4;
 
+function rate(c,ok){
+  const k=keyOf(c);
+  const prior=srs[k]||{};
+  const prev=prior.b||0;
+  const b=ok?Math.min(5,Math.max(2,prev+1)):1;
 
-function rate(c, ok) {
-  const k = keyOf(c);
-  const prior = srs[k] || {};
-  const prev = prior.b || 0;
-  const b = ok ? Math.min(5, Math.max(2, prev + 1)) : 1;
-
-  srs[k] = {
+  srs[k]={
     b,
-    d: addDays(INTERVAL[b]),
-    t: Date.now(),
-    xpDate: prior.xpDate || "",
-    masteryXpAwarded: !!prior.masteryXpAwarded
+    d:addDays(INTERVAL[b]),
+    t:Date.now(),
+    xpDate:prior.xpDate||"",
+    masteryXpAwarded:!!prior.masteryXpAwarded
   };
 
-  const currentWeek = window.getCurrentWeekId
-    ? window.getCurrentWeekId()
-    : today();
+  const currentWeek=window.getCurrentWeekId
+    ?window.getCurrentWeekId()
+    :today();
 
-  const xpStore = store.get("wk2_xp", {
-    weekId: currentWeek,
-    xp: 0
+  const xpStore=store.get("wk2_xp",{
+    weekId:currentWeek,
+    xp:0
   });
 
-  if (xpStore.weekId !== currentWeek) {
-    xpStore.weekId = currentWeek;
-    xpStore.xp = 0;
+  if(xpStore.weekId!==currentWeek){
+    xpStore.weekId=currentWeek;
+    xpStore.xp=0;
   }
 
-  if (ok && prior.xpDate !== today()) {
-    xpStore.xp += 10;
-    srs[k].xpDate = today();
+  // Track the exact XP earned during this review.
+  let earnedXp=0;
 
-    if (b >= 4 && prev < 4 && !prior.masteryXpAwarded) {
-      xpStore.xp += 50;
-      srs[k].masteryXpAwarded = true;
+  if(ok&&prior.xpDate!==today()){
+    earnedXp+=10;
+    srs[k].xpDate=today();
+
+    if(b>=4&&prev<4&&!prior.masteryXpAwarded){
+      earnedXp+=50;
+      srs[k].masteryXpAwarded=true;
     }
   }
 
-  store.set("wk2_xp", xpStore);
+  // Weekly XP resets each week.
+  xpStore.xp=(Number(xpStore.xp)||0)+earnedXp;
+  store.set("wk2_xp",xpStore);
+
+  // Lifetime XP never resets.
+  if(earnedXp>0){
+    const lifetimeXp=Math.max(
+      0,
+      Number(store.get("wk2_total_xp",0))||0
+    );
+
+    store.set("wk2_total_xp",lifetimeXp+earnedXp);
+  }
 
   saveSrs();
   touchDay();
 }
-
 
 function photos(c){
   const p=(IMG[c.g]||{})[c.q];
@@ -384,72 +414,79 @@ function jobsView(){
 }
 
 // Account Profile & Stats View
-function accountView() {
-  const app = $("#app");
-  const user = typeof window.getUser === "function" ? window.getUser() : null;
+function accountView(){
+  const app=$("#app");
+  const user=typeof window.getUser==="function"?window.getUser():null;
 
-  if (!user) {
-    app.innerHTML = `
+  if(!user){
+    app.innerHTML=`
       <h2 class="h">Account Settings</h2>
       <p class="note">Please sign in using the button at the top right to manage your profile.</p>
     `;
     return;
   }
 
-  const currentName = user.displayName || user.email.split("@")[0];
-  const currentPhoto = user.photoURL || "";
-  
-  const allCards = (typeof C !== "undefined" && typeof visible === "function") ? C.filter(visible) : [];
-  const masteredCount = (typeof mastered === "function") ? allCards.filter(mastered).length : 0;
-  const currentStreak = (typeof streak === "function") ? streak() : 0;
-  const currentWeek = window.getCurrentWeekId
-  ? window.getCurrentWeekId()
-  : today();
+  const currentName=user.displayName||user.email?.split("@")[0]||"Cadet";
+  const currentPhoto=user.photoURL||"";
 
-const savedXp = store.get("wk2_xp", {
-  weekId: currentWeek,
-  xp: 0
-});
+  const allCards=typeof C!=="undefined"&&typeof visible==="function"?C.filter(visible):[];
+  const masteredCount=typeof mastered==="function"?allCards.filter(mastered).length:0;
+  const currentStreak=typeof streak==="function"?streak():0;
 
-const totalXp = savedXp.weekId === currentWeek
-  ? savedXp.xp
-  : 0;
+  const currentWeek=window.getCurrentWeekId
+    ?window.getCurrentWeekId()
+    :today();
 
-  app.innerHTML = `
+  const savedXp=store.get("wk2_xp",{
+    weekId:currentWeek,
+    xp:0
+  });
+
+  const weeklyXp=savedXp.weekId===currentWeek
+    ?Number(savedXp.xp)||0
+    :0;
+
+  const lifetimeXp=window.getTotalXp();
+
+  app.innerHTML=`
     <h2 class="h">Account & Cadet Profile</h2>
     <p class="sub">Manage your identity and inspect your active standing.</p>
-    
-    <div class="account-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 16px;">
-      
-      <div class="qcard" style="margin: 0; text-align: left; align-items: stretch;">
-        <h3 style="margin-top: 0; font: 700 1.2rem var(--d);">Identity</h3>
-        <label style="display: block; margin-bottom: 12px;">
+
+    <div class="account-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:16px;">
+
+      <div class="qcard" style="margin:0;text-align:left;align-items:stretch;">
+        <h3 style="margin-top:0;font:700 1.2rem var(--d);">Identity</h3>
+        <label style="display:block;margin-bottom:12px;">
           <b>Display Name</b>
           <input type="text" id="acc-name" class="ti" value="${esc(currentName)}" placeholder="Enter your display name">
         </label>
-        <label style="display: block; margin-bottom: 16px;">
+        <label style="display:block;margin-bottom:16px;">
           <b>Profile Picture URL</b>
           <input type="url" id="acc-photo" class="ti" value="${esc(currentPhoto)}" placeholder="https://example.com/photo.jpg">
         </label>
-        <div class="acts" style="justify-content: flex-start;">
+        <div class="acts" style="justify-content:flex-start;">
           <button class="btn go" id="save-profile">Save Changes</button>
         </div>
       </div>
 
-      <div class="qcard" style="margin: 0; text-align: left; align-items: stretch;">
-        <h3 style="margin-top: 0; font: 700 1.2rem var(--d);">Active Standing</h3>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
-          <div class="stat" style="padding: 12px;">
+      <div class="qcard" style="margin:0;text-align:left;align-items:stretch;">
+        <h3 style="margin-top:0;font:700 1.2rem var(--d);">Active Standing</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;">
+          <div class="stat" style="padding:12px;">
             <b>${currentStreak}</b>
             <span>Day Streak</span>
           </div>
-          <div class="stat" style="padding: 12px;">
-            <b>${totalXp}</b>
-            <span>Weekly XP</span>
-          </div>
-          <div class="stat" style="padding: 12px; grid-column: span 2;">
+          <div class="stat" style="padding:12px;">
             <b>${masteredCount}</b>
             <span>Cards Mastered</span>
+          </div>
+          <div class="stat" style="padding:12px;">
+            <b>${weeklyXp}</b>
+            <span>Weekly XP</span>
+          </div>
+          <div class="stat" style="padding:12px;">
+            <b>${lifetimeXp}</b>
+            <span>Lifetime XP</span>
           </div>
         </div>
       </div>
@@ -457,43 +494,42 @@ const totalXp = savedXp.weekId === currentWeek
     </div>
   `;
 
-  $("#save-profile").onclick = async () => {
-    const name = $("#acc-name").value.trim();
-    const photo = $("#acc-photo").value.trim();
-    if (!name) {
+  $("#save-profile").onclick=async()=>{
+    const name=$("#acc-name").value.trim();
+    const photo=$("#acc-photo").value.trim();
+    if(!name){
       toast("Name cannot be empty");
       return;
     }
-    if (typeof window.updateUserProfile === "function") {
-      await window.updateUserProfile(name, photo);
+    if(typeof window.updateUserProfile==="function"){
+      await window.updateUserProfile(name,photo);
       render();
     }
   };
 }
 
 // Weekly Leaderboard View with Live Countdown & Clickable Profiles
+async function leaderboardView(){
+  const app=$("#app");
 
-async function leaderboardView() {
-  const app = $("#app");
+  const getTimeRemaining=()=>{
+    const now=new Date();
+    const nextSunday=new Date(now);
+    const daysUntilSunday=(7-now.getDay())||7;
 
-  const getTimeRemaining = () => {
-    const now = new Date();
-    const nextSunday = new Date(now);
-    const daysUntilSunday = (7 - now.getDay()) || 7;
+    nextSunday.setDate(now.getDate()+daysUntilSunday);
+    nextSunday.setHours(0,0,0,0);
 
-    nextSunday.setDate(now.getDate() + daysUntilSunday);
-    nextSunday.setHours(0, 0, 0, 0);
+    const diff=Math.max(0,nextSunday-now);
+    const days=Math.floor(diff/86400000);
+    const hours=Math.floor((diff%86400000)/3600000);
+    const minutes=Math.floor((diff%3600000)/60000);
+    const seconds=Math.floor((diff%60000)/1000);
 
-    const diff = Math.max(0, nextSunday - now);
-    const days = Math.floor(diff / 86400000);
-    const hours = Math.floor((diff % 86400000) / 3600000);
-    const minutes = Math.floor((diff % 3600000) / 60000);
-    const seconds = Math.floor((diff % 60000) / 1000);
-
-    return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+    return`${days}d ${hours}h ${minutes}m ${seconds}s`;
   };
 
-  const header = `
+  const header=`
     <h2 class="h">Weekly Leaderboard</h2>
     <p class="sub">Top cadets ranked by weekly XP. Rankings reset every Sunday.</p>
     <div id="lb-timer" class="note lb-timer">
@@ -501,54 +537,46 @@ async function leaderboardView() {
     </div>
   `;
 
-  app.innerHTML = header + `
+  app.innerHTML=header+`
     <div id="lb-loading" class="note">Loading weekly rankings...</div>
   `;
 
-  if (window.lbInterval) clearInterval(window.lbInterval);
+  if(window.lbInterval)clearInterval(window.lbInterval);
 
-  window.lbInterval = setInterval(() => {
-    const el = document.getElementById("lb-timer");
-    if (el) el.textContent = `Reset in: ${getTimeRemaining()}`;
-  }, 1000);
+  window.lbInterval=setInterval(()=>{
+    const el=document.getElementById("lb-timer");
+    if(el)el.textContent=`Reset in: ${getTimeRemaining()}`;
+  },1000);
 
-  if (typeof window.fetchWeeklyLeaderboard !== "function") {
-    $("#lb-loading").textContent =
-      "Leaderboard connection is not ready. Please refresh the page.";
+  if(typeof window.fetchWeeklyLeaderboard!=="function"){
+    $("#lb-loading").textContent="Leaderboard connection is not ready. Please refresh the page.";
     return;
   }
 
   let data;
 
-  try {
-    data = await window.fetchWeeklyLeaderboard();
-  } catch (err) {
-    console.error("Leaderboard loading failed:", err);
-
-    const loading = $("#lb-loading");
-    if (loading) {
-      loading.textContent =
-        "Unable to load rankings. Please try again later.";
-    }
+  try{
+    data=await window.fetchWeeklyLeaderboard();
+  }catch(err){
+    console.error("Leaderboard loading failed:",err);
+    const loading=$("#lb-loading");
+    if(loading)loading.textContent="Unable to load rankings. Please try again later.";
     return;
   }
 
-  if (location.hash !== "#leaderboard") return;
+  if(location.hash!=="#leaderboard")return;
 
-  if (!data.length) {
-    $("#lb-loading").textContent =
-      "No leaderboard records this week yet. Sign in and complete a review to participate.";
+  if(!data.length){
+    $("#lb-loading").textContent="No leaderboard records this week yet. Sign in and complete a review to participate.";
     return;
   }
 
-  const rows = data.map((item, index) => `
+  const rows=data.map((item,index)=>`
     <tr>
-      <td><b>#${index + 1}</b></td>
+      <td><b>#${index+1}</b></td>
       <td>
         <button class="lb-profile-btn" data-profile="${esc(item.id)}">
-          ${item.photo
-            ? `<img src="${esc(item.photo)}" class="lb-avatar" alt="">`
-            : ""}
+          ${item.photo?`<img src="${esc(item.photo)}" class="lb-avatar" alt="">`:""}
           <span>${esc(item.name)}</span>
         </button>
       </td>
@@ -558,7 +586,7 @@ async function leaderboardView() {
     </tr>
   `).join("");
 
-  app.innerHTML = header + `
+  app.innerHTML=header+`
     <div class="tw">
       <table id="lb-table">
         <thead>
@@ -575,61 +603,61 @@ async function leaderboardView() {
     </div>
   `;
 
-  document.querySelectorAll("[data-profile]").forEach(button => {
-    button.onclick = () =>
-      window.viewCadetProfile(button.dataset.profile);
+  document.querySelectorAll("[data-profile]").forEach(button=>{
+    button.onclick=()=>window.viewCadetProfile(button.dataset.profile);
   });
 }
 
-
 // Inspect Other Cadets' Profiles
+window.viewCadetProfile=async userId=>{
+  if(typeof window.fetchUserProfile!=="function")return;
 
-window.viewCadetProfile = async userId => {
-  if (typeof window.fetchUserProfile !== "function") return;
-
-  const app = $("#app");
-  app.innerHTML = '<p class="note">Loading cadet profile...</p>';
+  const app=$("#app");
+  app.innerHTML='<p class="note">Loading cadet profile...</p>';
 
   let profile;
 
-  try {
-    profile = await window.fetchUserProfile(userId);
-  } catch (err) {
-    console.error("Profile loading failed:", err);
+  try{
+    profile=await window.fetchUserProfile(userId);
+  }catch(err){
+    console.error("Profile loading failed:",err);
     toast("Could not load cadet profile");
     return;
   }
 
-  if (!profile) {
+  if(!profile){
     toast("Cadet profile not found");
     return;
   }
 
-  app.innerHTML = `
+  app.innerHTML=`
     <h2 class="h">Cadet Profile</h2>
     <p class="sub">Public cadet profile and study standing.</p>
 
     <div class="qcard cadet-profile">
-      ${profile.photoURL
-        ? `<img src="${esc(profile.photoURL)}" class="profile-photo" alt="">`
-        : ""}
+      ${profile.photoURL?`<img src="${esc(profile.photoURL)}" class="profile-photo" alt="">`:""}
 
-      <h3>${esc(profile.displayName || "Cadet")}</h3>
+      <h3>${esc(profile.displayName||"Cadet")}</h3>
 
       <div class="profile-stats">
         <div class="stat">
-          <b>${Number(profile.streak) || 0}</b>
+          <b>${Number(profile.streak)||0}</b>
           <span>Day Streak</span>
         </div>
 
         <div class="stat">
-          <b>${Number(profile.mastered) || 0}</b>
+          <b>${Number(profile.mastered)||0}</b>
           <span>Total Mastered</span>
         </div>
 
         <div class="stat">
-          <b>${Number(profile.weekly?.xp) || 0}</b>
+          <b>${Number(profile.weekly?.xp)||0}</b>
           <span>Weekly XP</span>
+        </div>
+
+        <div class="stat">
+          <b>${Number(profile.totalXp)||0}</b>
+          <span>Lifetime XP</span>
         </div>
       </div>
 
@@ -641,11 +669,8 @@ window.viewCadetProfile = async userId => {
     </div>
   `;
 
- $("#back-leaderboard").onclick = () => {
-  leaderboardView();
+  $("#back-leaderboard").onclick=()=>leaderboardView();
 };
-};
-
 
 const RANKS=[[45,"Cadet Colonel",[2,2,2,2]],[30,"Cadet Lieutenant Colonel",[2,2,2]],[21,"Cadet Major",[3,1.4,3]],[14,"Cadet Captain",[2.4,2.4]],[7,"Cadet First Lieutenant",[1.4,3]],[3,"Cadet Second Lieutenant",[3]]];
 const rankFor=n=>RANKS.find(r=>n>=r[0]);
@@ -656,110 +681,180 @@ function rankIcon(r){
   const rects=bars.map(h=>{const o=`<rect x="5" y="${y.toFixed(2)}" width="14" height="${h}" rx=".6" fill="#dfe5ec"/>`;y+=h+gap;return o}).join("");
   return`<svg class="rank-icon" viewBox="0 0 24 24" role="img" aria-label="${esc(r[1])}"><rect x="1.5" y="1.5" width="21" height="21" rx="3" fill="#0b0f14" stroke="#3a4656"/>${rects}</svg>`;
 }
+
 function mergeProgress(r){
   let changed=false;
   const rs=r.srs||{};
-  Object.keys(rs).forEach(k=>{const a=srs[k],b=rs[k];if(!a||(b.t||0)>(a.t||0)){srs[k]=b;changed=true}});
-  (r.days||[]).forEach(d=>{if(!days.includes(d)){days.push(d);changed=true}});
+
+  Object.keys(rs).forEach(k=>{
+    const a=srs[k],b=rs[k];
+    if(!a||(b.t||0)>(a.t||0)){
+      srs[k]=b;
+      changed=true;
+    }
+  });
+
+  (r.days||[]).forEach(d=>{
+    if(!days.includes(d)){
+      days.push(d);
+      changed=true;
+    }
+  });
+
   days.sort();
   if(days.length>90)days.splice(0,days.length-90);
-  const lt=store.get("wk2_tests",[]),seen=new Set(lt.map(x=>JSON.stringify(x)));
+
+  const lt=store.get("wk2_tests",[]);
+  const seen=new Set(lt.map(x=>JSON.stringify(x)));
   const add=(r.tests||[]).filter(x=>!seen.has(JSON.stringify(x)));
-  if(add.length){store.set("wk2_tests",[...lt,...add].sort((x,y)=>y.d<x.d?-1:y.d>x.d?1:0).slice(0,8));changed=true}
-  if(changed){store.set("wk2_srs",srs);store.set("wk2_days",days)}
+
+  if(add.length){
+    store.set("wk2_tests",[...lt,...add].sort((x,y)=>y.d<x.d?-1:y.d>x.d?1:0).slice(0,8));
+    changed=true;
+  }
+
+  if(changed){
+    store.set("wk2_srs",srs);
+    store.set("wk2_days",days);
+  }
+
   // Merge weekly XP without double-counting.
-if (r.xp && r.xp.weekId) {
-  const currentWeek = window.getCurrentWeekId
-    ? window.getCurrentWeekId()
-    : today();
+  if(r.xp&&r.xp.weekId){
+    const currentWeek=window.getCurrentWeekId
+      ?window.getCurrentWeekId()
+      :today();
 
-  if (r.xp.weekId === currentWeek) {
-    const localXp = store.get("wk2_xp", {
-      weekId: currentWeek,
-      xp: 0
-    });
-
-    const mergedXp = Math.max(
-      localXp.weekId === currentWeek
-        ? Number(localXp.xp) || 0
-        : 0,
-      Number(r.xp.xp) || 0
-    );
-
-    if (
-      localXp.weekId !== currentWeek ||
-      localXp.xp !== mergedXp
-    ) {
-      store.set("wk2_xp", {
-        weekId: currentWeek,
-        xp: mergedXp
+    if(r.xp.weekId===currentWeek){
+      const localXp=store.get("wk2_xp",{
+        weekId:currentWeek,
+        xp:0
       });
 
-      changed = true;
+      const mergedXp=Math.max(
+        localXp.weekId===currentWeek?Number(localXp.xp)||0:0,
+        Number(r.xp.xp)||0
+      );
+
+      if(localXp.weekId!==currentWeek||localXp.xp!==mergedXp){
+        store.set("wk2_xp",{
+          weekId:currentWeek,
+          xp:mergedXp
+        });
+        changed=true;
+      }
     }
   }
-}
+
+  // Merge lifetime XP using the higher value.
+  // This supports cloud data if totalXp is also included in the private sync.
+  if(r.totalXp!==undefined&&r.totalXp!==null){
+    const localTotal=Math.max(
+      0,
+      Number(store.get("wk2_total_xp",0))||0
+    );
+
+    const cloudTotal=Math.max(0,Number(r.totalXp)||0);
+    const mergedTotal=Math.max(localTotal,cloudTotal);
+
+    if(mergedTotal!==localTotal){
+      store.set("wk2_total_xp",mergedTotal);
+      changed=true;
+    }
+  }
+
   return changed;
 }
 
 // Robust Dropdown Handler for Mobile and Desktop
-function initDropdown() {
-  const btn = document.getElementById("moreBtn");
-  const menu = document.getElementById("moreMenu");
-  if (!btn || !menu) return;
+function initDropdown(){
+  const btn=document.getElementById("moreBtn");
+  const menu=document.getElementById("moreMenu");
+  if(!btn||!menu)return;
 
-  btn.onclick = (e) => {
+  btn.onclick=e=>{
     e.stopPropagation();
     menu.classList.toggle("show");
   };
 
-  document.addEventListener("click", (e) => {
-    if (!menu.contains(e.target) && !btn.contains(e.target)) {
+  document.addEventListener("click",e=>{
+    if(!menu.contains(e.target)&&!btn.contains(e.target)){
       menu.classList.remove("show");
     }
   });
 
-  menu.querySelectorAll("a").forEach(a => {
-    a.onclick = () => menu.classList.remove("show");
+  menu.querySelectorAll("a").forEach(a=>{
+    a.onclick=()=>menu.classList.remove("show");
   });
 }
 
-document.addEventListener("DOMContentLoaded", initDropdown);
+document.addEventListener("DOMContentLoaded",initDropdown);
 
 // Registered Views Mapping
 const views={home,drill,test,recite,plan,jobs:jobsView,account:accountView,leaderboard:leaderboardView};
 
 function render(){
   const r=views[location.hash.slice(1)]?location.hash.slice(1):"home";
+
   document.querySelectorAll("#nav a, .nav-drop-content a").forEach(a=>{
-    if(a.getAttribute("data-r")===r) a.setAttribute("aria-current","page");
+    if(a.getAttribute("data-r")===r)a.setAttribute("aria-current","page");
     else a.removeAttribute("aria-current");
   });
+
   const s=streak(),rk=rankFor(s),el=$("#streak");
+
   if(el){
     el.innerHTML=(rk?rankIcon(rk)+" ":"")+esc(s?s+" day streak":"No streak yet");
     el.title=rk?rk[1]+" streak rank"+(nextRank(rk)?". Next rank at "+nextRank(rk)[0]+" days.":"."):"";
   }
+
   if(r!=="test")clearInterval(tick);
-  if (r !== "leaderboard" && window.lbInterval) {
-  clearInterval(window.lbInterval);
-  window.lbInterval = null;
-}
+
+  if(r!=="leaderboard"&&window.lbInterval){
+    clearInterval(window.lbInterval);
+    window.lbInterval=null;
+  }
+
   views[r]();
   termSw();
 }
 
-window.addEventListener("hashchange",()=>{D=D&&location.hash==="#drill"?D:null;RC=RC&&location.hash==="#drill"?RC:null;T=T&&location.hash==="#test"?T:null;RS=null;render()});
+window.addEventListener("hashchange",()=>{
+  D=D&&location.hash==="#drill"?D:null;
+  RC=RC&&location.hash==="#drill"?RC:null;
+  T=T&&location.hash==="#test"?T:null;
+  RS=null;
+  render();
+});
+
 document.addEventListener("keydown",e=>{
   if(location.hash!=="#drill"||!D||!D.q[D.i]||e.target.tagName==="BUTTON"&&e.key===" ")return;
   const c=D.q[D.i];
-  if(e.key===" "){e.preventDefault();D.on=!D.on;render()}
-  else if(D.on&&e.key==="1"){rate(c,false);D.miss++;D.q.splice(Math.min(D.q.length,D.i+4),0,c);D.i++;D.on=false;render()}
-  else if(D.on&&e.key==="2"){rate(c,true);D.hit++;D.i++;D.on=false;render()}
+
+  if(e.key===" "){
+    e.preventDefault();
+    D.on=!D.on;
+    render();
+  }else if(D.on&&e.key==="1"){
+    rate(c,false);
+    D.miss++;
+    D.q.splice(Math.min(D.q.length,D.i+4),0,c);
+    D.i++;
+    D.on=false;
+    render();
+  }else if(D.on&&e.key==="2"){
+    rate(c,true);
+    D.hit++;
+    D.i++;
+    D.on=false;
+    render();
+  }
 });
 
 const baseTitle=document.title;
-document.addEventListener("visibilitychange",()=>{document.title=document.hidden?"Cadet, come back":baseTitle});
+document.addEventListener("visibilitychange",()=>{
+  document.title=document.hidden?"Cadet, come back":baseTitle;
+});
+
 console.log("%cBriefing Room","font:700 20px sans-serif;color:#ff5a36","Built for Det 195. Found something? Good. Now go study.");
 
 function toast(m){
@@ -783,10 +878,12 @@ if(cfg.night)document.documentElement.dataset.theme="night";
   const b=document.querySelector(".brand");
   if(!b)return;
   let n=0,t=0;
+
   b.addEventListener("click",()=>{
     const now=Date.now();
     n=now-t<1500?n+1:1;
     t=now;
+
     if(n>=5){
       n=0;
       const on=!cfg.night;

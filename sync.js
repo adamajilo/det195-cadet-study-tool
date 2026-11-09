@@ -1,4 +1,3 @@
-
 (async function initSync() {
   const fb = window.FIREBASE_CONFIG;
 
@@ -64,15 +63,34 @@
 
     window.getCurrentWeekId = getCurrentWeekId;
 
+    // Handles both JSON strings and regular Firestore values.
+    const parseStored = (value, fallback) => {
+      if (value == null || value === "") return fallback;
+
+      if (typeof value === "string") {
+        try {
+          return JSON.parse(value);
+        } catch {
+          return fallback;
+        }
+      }
+
+      return value;
+    };
+
     const getLocalProgress = () => ({
-  srs: store.get("wk2_srs", {}),
-  days: store.get("wk2_days", []),
-  tests: store.get("wk2_tests", []),
-  xp: store.get("wk2_xp", {
-    weekId: getCurrentWeekId(),
-    xp: 0
-  })
-});
+      srs: store.get("wk2_srs", {}),
+      days: store.get("wk2_days", []),
+      tests: store.get("wk2_tests", []),
+      xp: store.get("wk2_xp", {
+        weekId: getCurrentWeekId(),
+        xp: 0
+      }),
+      totalXp: Math.max(
+        0,
+        Number(store.get("wk2_total_xp", 0)) || 0
+      )
+    });
 
     const getMetrics = () => {
       const cards = typeof C !== "undefined"
@@ -103,7 +121,11 @@
         weekId,
         weeklyXp: savedXp.weekId === weekId
           ? Math.max(0, Number(savedXp.xp) || 0)
-          : 0
+          : 0,
+        totalXp: Math.max(
+          0,
+          Number(store.get("wk2_total_xp", 0)) || 0
+        )
       };
     };
 
@@ -140,22 +162,23 @@
       }
     };
 
-    // Private study progress stays in users/{uid}.
+    // Private study progress and XP stay in users/{uid}.
     const pushPrivateProgress = async () => {
       if (!user) return;
 
       const progress = getLocalProgress();
 
       await setDoc(doc(db, "users", user.uid), {
-  srs: JSON.stringify(progress.srs),
-  days: progress.days,
-  tests: JSON.stringify(progress.tests),
-  xp: progress.xp,
-  updated: Date.now()
-}, { merge: true });
+        srs: JSON.stringify(progress.srs),
+        days: progress.days,
+        tests: JSON.stringify(progress.tests),
+        xp: progress.xp,
+        totalXp: progress.totalXp,
+        updated: Date.now()
+      }, { merge: true });
     };
 
-    // Only public profile information goes into publicProfiles/{uid}.
+    // Public profile information goes into publicProfiles/{uid}.
     const pushPublicProfile = async () => {
       if (!user) return;
 
@@ -166,12 +189,63 @@
         photoURL: user.photoURL || "",
         mastered: metrics.masteredCount,
         streak: metrics.currentStreak,
+        totalXp: metrics.totalXp,
         weekly: {
           weekId: metrics.weekId,
           xp: metrics.weeklyXp
         },
         updated: Date.now()
       }, { merge: true });
+    };
+
+    // Merge weekly XP without adding the same XP twice.
+    const mergeWeeklyXp = cloudXp => {
+      if (!cloudXp || !cloudXp.weekId) return;
+
+      const currentWeek = getCurrentWeekId();
+
+      if (cloudXp.weekId !== currentWeek) return;
+
+      const localXp = store.get("wk2_xp", {
+        weekId: currentWeek,
+        xp: 0
+      });
+
+      const localValue = localXp.weekId === currentWeek
+        ? Math.max(0, Number(localXp.xp) || 0)
+        : 0;
+
+      const cloudValue = Math.max(0, Number(cloudXp.xp) || 0);
+      const merged = Math.max(localValue, cloudValue);
+
+      if (
+        localXp.weekId !== currentWeek ||
+        localValue !== merged
+      ) {
+        store.set("wk2_xp", {
+          weekId: currentWeek,
+          xp: merged
+        });
+      }
+    };
+
+    // Lifetime XP never resets.
+    const mergeTotalXp = cloudTotalXp => {
+      const local = Math.max(
+        0,
+        Number(store.get("wk2_total_xp", 0)) || 0
+      );
+
+      const cloud = Math.max(
+        0,
+        Number(cloudTotalXp) || 0
+      );
+
+      const merged = Math.max(local, cloud);
+
+      if (merged !== local) {
+        store.set("wk2_total_xp", merged);
+      }
     };
 
     async function sync() {
@@ -187,25 +261,42 @@
 
       try {
         const privateRef = doc(db, "users", user.uid);
-        const snap = await getDoc(privateRef);
+        const publicRef = doc(db, "publicProfiles", user.uid);
 
-        if (snap.exists()) {
-          const data = snap.data();
+        // Download private progress.
+        const privateSnap = await getDoc(privateRef);
+
+        if (privateSnap.exists()) {
+          const data = privateSnap.data();
 
           if (typeof mergeProgress === "function") {
             const changed = mergeProgress({
-  srs: JSON.parse(data.srs || "{}"),
-  days: data.days || [],
-  tests: JSON.parse(data.tests || "[]"),
-  xp: data.xp || null
-});
+              srs: parseStored(data.srs, {}),
+              days: data.days || [],
+              tests: parseStored(data.tests, []),
+              xp: data.xp || null
+            });
 
             if (changed && typeof render === "function") {
               render();
             }
           }
+
+          mergeWeeklyXp(data.xp);
+          mergeTotalXp(data.totalXp);
         }
 
+        // Also check the public profile in case it has a newer XP value.
+        const publicSnap = await getDoc(publicRef);
+
+        if (publicSnap.exists()) {
+          const publicData = publicSnap.data();
+
+          mergeWeeklyXp(publicData.weekly);
+          mergeTotalXp(publicData.totalXp);
+        }
+
+        // Upload the merged local progress and updated public profile.
         await pushPrivateProgress();
         await pushPublicProfile();
 
@@ -273,6 +364,7 @@
           name: data.displayName || "Anonymous Cadet",
           photo: data.photoURL || "",
           xpWeekly: Number(data.weekly?.xp) || 0,
+          totalXp: Number(data.totalXp) || 0,
           mastered: Number(data.mastered) || 0,
           streak: Number(data.streak) || 0
         };
