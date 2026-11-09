@@ -147,13 +147,37 @@ button:disabled {
     background: rgba(255, 255, 255, 0.08);
 }
 
-.acct-avatar, .lb-avatar {
+.acct-avatar {
   width: 28px;  
   height: 28px;
   border-radius: 50%;
   object-fit: cover;
   vertical-align: middle;
   border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Leaderboard Spacing Fixes */
+.lb-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  vertical-align: middle;
+  margin-right: 12px; /* Adds space between avatar and name */
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Expand Leaderboard Table Row Spacing */
+#lb-table th, 
+#lb-table td, 
+.tw table th, 
+.tw table td {
+  padding: 14px 18px; /* Increases vertical and horizontal cell padding */
+}
+
+/* Ensures rank number, name, mastered count, and streak don't crowd together */
+.tw td:first-child {
+  padding-right: 24px;
 }
 
 /* Navigation & Split Menu */
