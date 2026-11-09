@@ -21,6 +21,14 @@
     const box = document.getElementById("acct");
     let user = null, timer = null, busy = false, again = false;
 
+    // Helper: Returns YYYY-MM-DD of the most recent Sunday for weekly resets
+    const getCurrentWeekId = () => {
+      const d = new Date();
+      const day = d.getDay(); // 0 is Sunday
+      d.setDate(d.getDate() - day);
+      return d.toISOString().split("T")[0];
+    };
+
     // Render Auth UI in Header
     const paint = () => {
       if (!box) return;
@@ -39,13 +47,37 @@
       if (so) so.onclick = () => signOut(auth).then(() => toast("Signed out."));
     };
 
-    // Push User Profile & Spaced Repetition Stats to Firestore with Safe Guards
+    // Push User Profile, Spaced Repetition Stats & Weekly Metrics to Firestore
     const push = async ref => {
       if (!user) return;
       const allCards = (typeof C !== "undefined" && typeof visible === "function") ? C.filter(visible) : [];
       const masteredCount = (typeof mastered === "function") ? allCards.filter(mastered).length : 0;
       const currentStreak = (typeof streak === "function") ? streak() : 0;
       
+      const weekId = getCurrentWeekId();
+      
+      // Pull existing document to handle weekly rollover
+      const snap = await getDoc(ref);
+      let weeklyData = { weekId, mastered: 0, xp: 0 };
+      
+      if (snap.exists()) {
+        const existing = snap.data();
+        if (existing.weekly && existing.weekly.weekId === weekId) {
+          weeklyData = existing.weekly;
+          const prevMastered = existing.mastered || 0;
+          if (masteredCount > prevMastered) {
+            const diff = masteredCount - prevMastered;
+            weeklyData.mastered += diff;
+            weeklyData.xp += diff * 50; // 50 XP per mastered card
+          }
+        } else {
+          // New week started! Reset weekly stats
+          weeklyData = { weekId, mastered: 0, xp: currentStreak * 25 };
+        }
+      } else {
+        weeklyData.xp = currentStreak * 25;
+      }
+
       const safeSrs = (typeof srs !== "undefined") ? JSON.stringify(srs) : "{}";
       const safeDays = (typeof days !== "undefined") ? [...days] : [];
       const safeTests = (typeof store !== "undefined") ? JSON.stringify(store.get("wk2_tests", [])) : "[]";
@@ -55,6 +87,7 @@
         photoURL: user.photoURL || "",
         mastered: masteredCount,
         streak: currentStreak,
+        weekly: weeklyData,
         srs: safeSrs,
         days: safeDays,
         tests: safeTests,
@@ -93,65 +126,82 @@
       return ok;
     }
 
-    // Expose Profile Update Handler with clean fallbacks
-window.updateUserProfile = async (newName, newPhoto) => {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    toast("No active user session");
-    return false;
-  }
+    // Expose Profile Update Handler
+    window.updateUserProfile = async (newName, newPhoto) => {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        toast("No active user session");
+        return false;
+      }
 
-  try {
-    // 1. Update Firebase Auth Profile
-    await updateProfile(currentUser, {
-      displayName: newName,
-      photoURL: newPhoto
-    });
-
-    // 2. Update Firestore Document
-    const ref = doc(db, "users", currentUser.uid);
-    await setDoc(ref, {
-      displayName: newName,
-      photoURL: newPhoto,
-      updated: Date.now()
-    }, { merge: true });
-
-    // 3. Update local user state & re-render header badge
-    user = auth.currentUser;
-    paint();
-    toast("Profile updated!");
-    return true;
-
-  } catch (err) {
-    console.error("Profile update error details:", err);
-    // If auth succeeded but Firestore failed, still refresh UI state
-    paint();
-    toast("Profile updated locally (cloud sync retry scheduled)");
-    if (typeof queueSync === "function") queueSync();
-    return false;
-  }
-};
-
-    // Fetch Leaderboard
-    window.fetchLeaderboard = async () => {
       try {
-        const q = query(collection(db, "users"), orderBy("mastered", "desc"), limit(25));
+        await updateProfile(currentUser, {
+          displayName: newName,
+          photoURL: newPhoto
+        });
+
+        const ref = doc(db, "users", currentUser.uid);
+        await setDoc(ref, {
+          displayName: newName,
+          photoURL: newPhoto,
+          updated: Date.now()
+        }, { merge: true });
+
+        user = auth.currentUser;
+        paint();
+        toast("Profile updated!");
+        return true;
+      } catch (err) {
+        console.error("Profile update error details:", err);
+        paint();
+        toast("Profile updated locally (cloud sync retry scheduled)");
+        if (typeof queueSync === "function") queueSync();
+        return false;
+      }
+    };
+
+    // Fetch Weekly Leaderboard
+    window.fetchWeeklyLeaderboard = async () => {
+      try {
+        const weekId = getCurrentWeekId();
+        const q = query(
+          collection(db, "users"), 
+          orderBy("weekly.xp", "desc"), 
+          orderBy("weekly.mastered", "desc"), 
+          limit(25)
+        );
         const querySnapshot = await getDocs(q);
         const list = [];
         querySnapshot.forEach(docSnap => {
           const data = docSnap.data();
-          list.push({
-            id: docSnap.id,
-            name: data.displayName || "Anonymous Cadet",
-            photo: data.photoURL || "",
-            mastered: data.mastered || 0,
-            streak: data.streak || 0
-          });
+          // Filter out records from previous weeks if query fallback returns them
+          if (data.weekly && data.weekly.weekId === weekId) {
+            list.push({
+              id: docSnap.id,
+              name: data.displayName || "Anonymous Cadet",
+              photo: data.photoURL || "",
+              xpWeekly: data.weekly?.xp || 0,
+              masteredWeekly: data.weekly?.mastered || 0,
+              streak: data.streak || 0
+            });
+          }
         });
         return list;
       } catch (err) {
-        console.error("Error fetching leaderboard:", err);
+        console.error("Error fetching weekly leaderboard:", err);
         return [];
+      }
+    };
+
+    // Fetch Individual Cadet Profile for Inspection
+    window.fetchUserProfile = async (userId) => {
+      try {
+        const docRef = doc(db, "users", userId);
+        const snap = await getDoc(docRef);
+        return snap.exists() ? snap.data() : null;
+      } catch (err) {
+        console.error("Failed to fetch user profile:", err);
+        return null;
       }
     };
 

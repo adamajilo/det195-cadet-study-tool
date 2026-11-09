@@ -343,7 +343,6 @@ function jobsView(){
   draw();
 }
 
-// Account Profile View (Allows name and avatar updates)
 // Account Profile & Stats View
 function accountView() {
   const app = $("#app");
@@ -360,7 +359,6 @@ function accountView() {
   const currentName = user.displayName || user.email.split("@")[0];
   const currentPhoto = user.photoURL || "";
   
-  // Pull live metrics safely from app context
   const allCards = (typeof C !== "undefined" && typeof visible === "function") ? C.filter(visible) : [];
   const masteredCount = (typeof mastered === "function") ? allCards.filter(mastered).length : 0;
   const currentStreak = (typeof streak === "function") ? streak() : 0;
@@ -372,7 +370,6 @@ function accountView() {
     
     <div class="account-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 16px;">
       
-      <!-- Profile Editor Card -->
       <div class="qcard" style="margin: 0; text-align: left; align-items: stretch;">
         <h3 style="margin-top: 0; font: 700 1.2rem var(--d);">Identity</h3>
         <label style="display: block; margin-bottom: 12px;">
@@ -388,7 +385,6 @@ function accountView() {
         </div>
       </div>
 
-      <!-- Stats & Standing Card -->
       <div class="qcard" style="margin: 0; text-align: left; align-items: stretch;">
         <h3 style="margin-top: 0; font: 700 1.2rem var(--d);">Active Standing</h3>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
@@ -424,19 +420,19 @@ function accountView() {
   };
 }
 
-// Leaderboard View with explicit flex spacing
+// Weekly Leaderboard View with Clickable Cadet Profiles
 async function leaderboardView() {
   const app = $("#app");
-  app.innerHTML = `<h2 class="h">Leaderboard</h2><p class="sub">Top cadets by total cards mastered across all topics.</p><div id="lb-loading" class="note">Loading ranks...</div>`;
+  app.innerHTML = `<h2 class="h">Weekly Leaderboard</h2><p class="sub">Top cadets by weekly XP and cards mastered. Resets every Sunday.</p><div id="lb-loading" class="note">Loading weekly ranks...</div>`;
   
-  if (typeof window.fetchLeaderboard !== "function") {
+  if (typeof window.fetchWeeklyLeaderboard !== "function") {
     $("#lb-loading").textContent = "Sign in with Firebase to participate in the leaderboard.";
     return;
   }
 
-  const data = await window.fetchLeaderboard();
+  const data = await window.fetchWeeklyLeaderboard();
   if (!data.length) {
-    $("#lb-loading").textContent = "No leaderboard records found yet.";
+    $("#lb-loading").textContent = "No leaderboard records found for this week yet. Complete a review to get on the board!";
     return;
   }
 
@@ -444,27 +440,27 @@ async function leaderboardView() {
     <tr>
       <td><b>#${index + 1}</b></td>
       <td>
-        <div class="lb-user">
+        <div class="lb-user" style="cursor: pointer;" onclick="window.viewCadetProfile('${item.id}')">
           ${item.photo ? `<img src="${esc(item.photo)}" class="lb-avatar" alt="">` : ""}
-          <span>${esc(item.name)}</span>
+          <span style="text-decoration: underline; text-decoration-style: dotted;">${esc(item.name)}</span>
         </div>
       </td>
-      <td><b>${item.mastered}</b> cards</td>
-      <td>${item.streak} days</td>
+      <td><b>${item.xpWeekly}</b> XP</td>
+      <td><b>${item.masteredWeekly}</b> cards</td>
     </tr>
   `).join("");
 
   app.innerHTML = `
-    <h2 class="h">Leaderboard</h2>
-    <p class="sub">Top cadets by total cards mastered across all topics.</p>
+    <h2 class="h">Weekly Leaderboard</h2>
+    <p class="sub">Top cadets by weekly XP and cards mastered. Resets every Sunday.</p>
     <div class="tw">
       <table>
         <thead>
           <tr>
             <th>RANK</th>
             <th>CADET</th>
-            <th>MASTERED</th>
-            <th>STREAK</th>
+            <th>WEEKLY XP</th>
+            <th>MASTERY</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -472,6 +468,46 @@ async function leaderboardView() {
     </div>
   `;
 }
+
+// Inspect Other Cadets' Profiles
+window.viewCadetProfile = async (userId) => {
+  if (typeof window.fetchUserProfile !== "function") return;
+  const profile = await window.fetchUserProfile(userId);
+  if (!profile) {
+    toast("Could not load cadet profile");
+    return;
+  }
+
+  const app = $("#app");
+  app.innerHTML = `
+    <h2 class="h">Cadet Profile</h2>
+    <p class="sub">Inspecting operational standing.</p>
+    <div class="qcard" style="max-width: 400px; margin: 0 auto; text-align: center;">
+      ${profile.photoURL ? `<img src="${esc(profile.photoURL)}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 12px; border: 2px solid var(--accent);" alt="">` : ""}
+      <h3 style="margin: 0 0 16px; font: 700 1.5rem var(--d);">${esc(profile.displayName || "Cadet")}</h3>
+      
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; margin-bottom: 20px;">
+        <div class="stat" style="padding: 10px;">
+          <b>${profile.streak || 0}</b>
+          <span>Day Streak</span>
+        </div>
+        <div class="stat" style="padding: 10px;">
+          <b>${profile.mastered || 0}</b>
+          <span>Total Mastered</span>
+        </div>
+        <div class="stat" style="padding: 10px; grid-column: span 2;">
+          <b>${profile.weekly?.xp || 0} XP</b>
+          <span>This Week's Standing</span>
+        </div>
+      </div>
+
+      <div class="acts">
+        <button class="btn go" onclick="location.hash='#leaderboard'">Back to Leaderboard</button>
+      </div>
+    </div>
+  `;
+};
+
 const RANKS=[[45,"Cadet Colonel",[2,2,2,2]],[30,"Cadet Lieutenant Colonel",[2,2,2]],[21,"Cadet Major",[3,1.4,3]],[14,"Cadet Captain",[2.4,2.4]],[7,"Cadet First Lieutenant",[1.4,3]],[3,"Cadet Second Lieutenant",[3]]];
 const rankFor=n=>RANKS.find(r=>n>=r[0]);
 const nextRank=r=>RANKS[RANKS.indexOf(r)-1];
