@@ -290,7 +290,7 @@ function test(){
   ${T.typed?`<input type="text" id="ti" class="ti" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type your answer" aria-label="Your answer" value="${esc(T.ans[T.i]||"")}">`:`<div class="opts">${q.opts.map((o,j)=>`<button class="ans ${T.ans[T.i]===j?"sel":""}" data-j="${j}">${esc(o)}</button>`).join("")}</div>`}
   <div class="acts" style="margin-top:14px"><button class="btn" id="pv" ${T.i?"":"disabled"}>Previous</button><button class="btn" id="nx" ${T.i<n-1?"":"disabled"}>Next</button><button class="btn go" id="sub">Submit test</button></div>`;
   document.querySelectorAll(".ans").forEach(b=>b.onclick=()=>{T.ans[T.i]=+b.dataset.j;render()});
-  if(T.typed){const ti=$("#ti");ti.oninput=()=>{T.ans[T.i]=ti.value};ti.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();if(T.i<n-1){T.i++;render()}else $("#sub").focus()}};ti.focus()}
+  if(T.typed){const ti=$("#ti");ti.oninput=()=>{T.ans[T.i]=ti.value};ti.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();if(T.i<n-1){T.i++;render()}else $("#sub").focus()}};ti.focus()};
   document.querySelectorAll(".qnav button").forEach(b=>b.onclick=()=>{T.i=+b.dataset.j;render()});
   $("#pv").onclick=()=>{T.i--;render()};
   $("#nx").onclick=()=>{T.i++;render()};
@@ -354,7 +354,14 @@ function rankIcon(r){
 function mergeProgress(r){
   let changed=false;
   const rs=r.srs||{};
-  Object.keys(rs).forEach(k=>{const a=srs[k],b=rs[k];if(!a||(b.t||0)>(a.t||0)){srs[k]=b;changed=true}});
+  Object.keys(rs).forEach(k=>{
+    const a=srs[k],b=rs[k];
+    // Reconcile spaced repetition box levels & timestamps, favoring the latest review or higher box progression
+    if(!a || (b.t||0) > (a.t||0) || (b.b||0) > (a.b||0)){
+      srs[k]=b;
+      changed=true;
+    }
+  });
   (r.days||[]).forEach(d=>{if(!days.includes(d)){days.push(d);changed=true}});
   days.sort();
   if(days.length>90)days.splice(0,days.length-90);
@@ -389,10 +396,3 @@ console.log("%cBriefing Room","font:700 20px sans-serif;color:#ff5a36","Built fo
 function toast(m){const t=document.createElement("div");t.className="toast";t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2200)}
 function setNight(on){if(on)document.documentElement.dataset.theme="night";else delete document.documentElement.dataset.theme;cfg.night=on;saveCfg()}
 if(cfg.night)document.documentElement.dataset.theme="night";
-(function(){
-  const b=document.querySelector(".brand");if(!b)return;
-  let n=0,t=0;
-  b.addEventListener("click",()=>{const now=Date.now();n=now-t<1500?n+1:1;t=now;if(n>=5){n=0;const on=!cfg.night;setNight(on);toast(on?"Night ops on":"Night ops off")}});
-})();
-if(!["All",...terms()].includes(cfg.term)){cfg.term=terms().length>1?termOf(nextTest()):"All";saveCfg()}
-loadJobs().then(render);

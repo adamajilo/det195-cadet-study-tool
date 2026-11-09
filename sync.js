@@ -18,7 +18,12 @@ if(fb&&fb.apiKey&&!String(fb.apiKey).startsWith("YOUR")){
     if(so)so.onclick=()=>signOut(auth).then(()=>toast("Signed out. Progress stays on this device."));
   };
 
-  const push=ref=>setDoc(ref,{srs:JSON.stringify(srs),days:[...days],tests:JSON.stringify(store.get("wk2_tests",[])),updated:Date.now()});
+  const push=ref=>setDoc(ref,{
+    srs:JSON.stringify(srs),
+    days:[...days],
+    tests:JSON.stringify(store.get("wk2_tests",[])),
+    updated:Date.now()
+  });
 
   async function sync(){
     if(!user)return false;
@@ -30,7 +35,11 @@ if(fb&&fb.apiKey&&!String(fb.apiKey).startsWith("YOUR")){
       const snap=await getDoc(ref);
       if(snap.exists()){
         const d=snap.data();
-        if(mergeProgress({srs:JSON.parse(d.srs||"{}"),days:d.days||[],tests:JSON.parse(d.tests||"[]")}))render();
+        if(mergeProgress({
+          srs:JSON.parse(d.srs||"{}"),
+          days:d.days||[],
+          tests:JSON.parse(d.tests||"[]")
+        })) render();
       }
       await push(ref);
       ok=true;
