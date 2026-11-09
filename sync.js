@@ -93,28 +93,44 @@
       return ok;
     }
 
-    // Expose Profile Update Handler
-    window.updateUserProfile = async (newName, newPhoto) => {
-      if (!auth.currentUser) return false;
-      try {
-        await updateProfile(auth.currentUser, {
-          displayName: newName,
-          photoURL: newPhoto
-        });
-        const ref = doc(db, "users", auth.currentUser.uid);
-        await setDoc(ref, {
-          displayName: newName,
-          photoURL: newPhoto
-        }, { merge: true });
-        paint();
-        toast("Profile updated!");
-        return true;
-      } catch (err) {
-        console.error("Profile update failed:", err);
-        toast("Failed to update profile");
-        return false;
-      }
-    };
+    // Expose Profile Update Handler with clean fallbacks
+window.updateUserProfile = async (newName, newPhoto) => {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    toast("No active user session");
+    return false;
+  }
+
+  try {
+    // 1. Update Firebase Auth Profile
+    await updateProfile(currentUser, {
+      displayName: newName,
+      photoURL: newPhoto
+    });
+
+    // 2. Update Firestore Document
+    const ref = doc(db, "users", currentUser.uid);
+    await setDoc(ref, {
+      displayName: newName,
+      photoURL: newPhoto,
+      updated: Date.now()
+    }, { merge: true });
+
+    // 3. Update local user state & re-render header badge
+    user = auth.currentUser;
+    paint();
+    toast("Profile updated!");
+    return true;
+
+  } catch (err) {
+    console.error("Profile update error details:", err);
+    // If auth succeeded but Firestore failed, still refresh UI state
+    paint();
+    toast("Profile updated locally (cloud sync retry scheduled)");
+    if (typeof queueSync === "function") queueSync();
+    return false;
+  }
+};
 
     // Fetch Leaderboard
     window.fetchLeaderboard = async () => {

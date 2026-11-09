@@ -125,22 +125,22 @@ button:disabled {
     display: none;
 }
 
-.acct-user {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+#acct .acct-user {
+  display: flex;
+  align-items: center;
+  gap: 14px; /* Increased spacing */
 }
 
 .user-link {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    text-decoration: none;
-    color: inherit;
-    font-weight: 500;
-    padding: 4px 8px;
-    border-radius: 4px;
-    transition: background 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 12px; /* Increased spacing between avatar and name */
+  text-decoration: none;
+  color: inherit;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s ease;
 }
 
 .user-link:hover {
@@ -148,12 +148,12 @@ button:disabled {
 }
 
 .acct-avatar, .lb-avatar {
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    object-fit: cover;
-    vertical-align: middle;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+  width: 28px;  
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  vertical-align: middle;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 /* Navigation & Split Menu */
