@@ -163,7 +163,7 @@ button:disabled {
   border-radius: 50%;
   object-fit: cover;
   vertical-align: middle;
-  margin-right: 12px; /* Adds space between avatar and name */
+  margin-right: 20px; /* Adds space between avatar and name */
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
