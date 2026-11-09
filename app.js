@@ -344,6 +344,7 @@ function jobsView(){
 }
 
 // Account Profile View (Allows name and avatar updates)
+// Account Profile & Stats View
 function accountView() {
   const app = $("#app");
   const user = typeof window.getUser === "function" ? window.getUser() : null;
@@ -358,22 +359,54 @@ function accountView() {
 
   const currentName = user.displayName || user.email.split("@")[0];
   const currentPhoto = user.photoURL || "";
+  
+  // Pull live metrics safely from app context
+  const allCards = (typeof C !== "undefined" && typeof visible === "function") ? C.filter(visible) : [];
+  const masteredCount = (typeof mastered === "function") ? allCards.filter(mastered).length : 0;
+  const currentStreak = (typeof streak === "function") ? streak() : 0;
+  const totalXp = (typeof srs !== "undefined") ? Object.keys(srs).length * 15 + (currentStreak * 25) : 0;
 
   app.innerHTML = `
-    <h2 class="h">Account Settings</h2>
-    <p class="sub">Customize how your name and avatar appear on the leaderboard.</p>
-    <div class="qcard" style="max-width:400px; margin:0 auto; text-align:left;">
-      <label style="display:block; margin-bottom:12px;">
-        <b>Display Name</b>
-        <input type="text" id="acc-name" class="ti" value="${esc(currentName)}" placeholder="Enter your display name">
-      </label>
-      <label style="display:block; margin-bottom:12px;">
-        <b>Profile Picture URL</b>
-        <input type="url" id="acc-photo" class="ti" value="${esc(currentPhoto)}" placeholder="https://example.com/photo.jpg">
-      </label>
-      <div class="acts">
-        <button class="btn go" id="save-profile">Save Changes</button>
+    <h2 class="h">Account & Cadet Profile</h2>
+    <p class="sub">Manage your identity and inspect your active standing.</p>
+    
+    <div class="account-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 16px;">
+      
+      <!-- Profile Editor Card -->
+      <div class="qcard" style="margin: 0; text-align: left; align-items: stretch;">
+        <h3 style="margin-top: 0; font: 700 1.2rem var(--d);">Identity</h3>
+        <label style="display: block; margin-bottom: 12px;">
+          <b>Display Name</b>
+          <input type="text" id="acc-name" class="ti" value="${esc(currentName)}" placeholder="Enter your display name">
+        </label>
+        <label style="display: block; margin-bottom: 16px;">
+          <b>Profile Picture URL</b>
+          <input type="url" id="acc-photo" class="ti" value="${esc(currentPhoto)}" placeholder="https://example.com/photo.jpg">
+        </label>
+        <div class="acts" style="justify-content: flex-start;">
+          <button class="btn go" id="save-profile">Save Changes</button>
+        </div>
       </div>
+
+      <!-- Stats & Standing Card -->
+      <div class="qcard" style="margin: 0; text-align: left; align-items: stretch;">
+        <h3 style="margin-top: 0; font: 700 1.2rem var(--d);">Active Standing</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
+          <div class="stat" style="padding: 12px;">
+            <b>${currentStreak}</b>
+            <span>Day Streak</span>
+          </div>
+          <div class="stat" style="padding: 12px;">
+            <b>${totalXp}</b>
+            <span>Total XP</span>
+          </div>
+          <div class="stat" style="padding: 12px; grid-column: span 2;">
+            <b>${masteredCount}</b>
+            <span>Cards Mastered</span>
+          </div>
+        </div>
+      </div>
+
     </div>
   `;
 
