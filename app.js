@@ -16,8 +16,9 @@ const srs=store.get("wk2_srs",{});
 const days=store.get("wk2_days",[]);
 const INTERVAL=[0,0,1,3,7,14];
 const saveCfg=()=>store.set("wk2_cfg",cfg);
-const saveSrs=()=>store.set("wk2_srs",srs);
-function touchDay(){const t=today();if(!days.includes(t)){days.push(t);store.set("wk2_days",days.slice(-90))}}
+const ping=()=>{if(window.queueSync)window.queueSync()};
+const saveSrs=()=>{store.set("wk2_srs",srs);ping()};
+function touchDay(){const t=today();if(!days.includes(t)){days.push(t);store.set("wk2_days",days.slice(-90));ping()}}
 function streak(){let n=0;const d=new Date();if(!days.includes(ymd(d)))d.setDate(d.getDate()-1);while(days.includes(ymd(d))){n++;d.setDate(d.getDate()-1)}return n}
 
 const baseVis=c=>(cfg.zh||c.kind!=="zh")&&(cfg.jobs||c.kind!=="job")&&(cfg.ac||(c.kind!=="ac"&&c.g!=="Aircraft"));
@@ -33,7 +34,7 @@ const mastered=c=>box(c)>=4;
 function rate(c,ok){
   const k=keyOf(c);const prev=srs[k]?srs[k].b:0;
   const b=ok?Math.min(5,Math.max(2,prev+1)):1;
-  srs[k]={b,d:addDays(INTERVAL[b])};saveSrs();touchDay();
+  srs[k]={b,d:addDays(INTERVAL[b]),t:Date.now()};saveSrs();touchDay();
 }
 
 function photos(c){
@@ -104,7 +105,7 @@ function drill(){
     if(!c){
       const m=C.filter(visible).filter(mastered).length;
       app.innerHTML=`<div class="done"><b>${D.hit}/${D.hit+D.miss}</b><p>${D.q.length?"Session complete. You have "+m+" cards mastered overall.":"Nothing to review right now. Come back tomorrow or pick a topic from Home."}</p><div class="acts"><button class="btn go" id="again">Back to drill</button>${D.src&&D.src.length?'<button class="btn" id="prac">Practice these anyway</button><button class="btn" id="rst">Reset these cards</button>':""}<button class="btn" id="toHome">Home</button></div></div>`;
-      $("#again").onclick=()=>{D=null;render()};$("#toHome").onclick=()=>{D=null;location.hash="home"};if($("#prac"))$("#prac").onclick=()=>startDrill(D.src);if($("#rst"))$("#rst").onclick=()=>{if(confirm("Reset progress for these "+D.src.length+" cards?")){const src=D.src;src.forEach(c=>delete srs[keyOf(c)]);saveSrs();startDrill(src)}};return;
+      $("#again").onclick=()=>{D=null;render()};$("#toHome").onclick=()=>{D=null;location.hash="home"};if($("#prac"))$("#prac").onclick=()=>startDrill(D.src);if($("#rst"))$("#rst").onclick=()=>{if(confirm("Reset progress for these "+D.src.length+" cards?")){const src=D.src;src.forEach(c=>{srs[keyOf(c)]={b:0,d:today(),t:Date.now()}});saveSrs();startDrill(src)}};return;
     }
     const P=`<p class="ft">${esc(c.q)}</p>`;
     const A=`${shots(c)}<p class="ft${c.kind==="zh"?" zh":""}">${esc(c.a)}</p>`;
@@ -133,7 +134,7 @@ function drill(){
   <div class="row"><button class="tg" id="rev" aria-pressed="${cfg.rev}">Answer first</button><button class="tg" id="zh" aria-pressed="${cfg.zh}">Chinese phrases</button><button class="tg" id="ac" aria-pressed="${cfg.ac}">Aircraft (FTP only)</button><button class="tg" id="jobs" aria-pressed="${cfg.jobs}">Career codes</button><button class="tg" id="rall">Reset all progress</button></div>`;
   document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{const s=b.dataset.s;if(s==="rec"){const ph=all.filter(c=>photos(c).length);if(!ph.length)return;D=null;RC={qs:shuffle(ph).slice(0,20).map(c=>buildQ(c,all,true)),i:0,hit:0,pick:null};render();return}startDrill(s==="test"?sc:s==="due"?all.filter(c=>box(c)>0):s==="weak"?all.filter(c=>box(c)===1):all,s==="due")});
   ["rev","zh","ac","jobs"].forEach(k=>$("#"+k).onclick=()=>{cfg[k]=!cfg[k];saveCfg();render()});
-  $("#rall").onclick=()=>{if(confirm("Reset all card progress?")){Object.keys(srs).forEach(k=>delete srs[k]);saveSrs();render()}};
+  $("#rall").onclick=()=>{if(confirm("Reset all card progress?")){Object.keys(srs).forEach(k=>{srs[k]={b:0,d:today(),t:Date.now()}});saveSrs();render()}};
 }
 
 let RS=null;
@@ -221,7 +222,7 @@ function finish(){
   T.res.forEach((ok,j)=>rate(T.qs[j].c,ok));
   const h=store.get("wk2_tests",[]);
   h.unshift({d:today(),l:T.label,s:T.res.filter(Boolean).length,n:T.qs.length});
-  store.set("wk2_tests",h.slice(0,8));
+  store.set("wk2_tests",h.slice(0,8));ping();
   T.done=true;render();
 }
 
@@ -350,9 +351,19 @@ function rankIcon(r){
   const rects=bars.map(h=>{const o=`<rect x="5" y="${y.toFixed(2)}" width="14" height="${h}" rx=".6" fill="#dfe5ec"/>`;y+=h+gap;return o}).join("");
   return`<svg class="rank-icon" viewBox="0 0 24 24" role="img" aria-label="${esc(r[1])}"><rect x="1.5" y="1.5" width="21" height="21" rx="3" fill="#0b0f14" stroke="#3a4656"/>${rects}</svg>`;
 }
-//to simulate and check if streak works
-//fake=n=>{days.length=0;for(let i=0;i<n;i++){const d=new Date();d.setDate(d.getDate()-i);days.push(ymd(d))}render()}
-//fake(number)
+function mergeProgress(r){
+  let changed=false;
+  const rs=r.srs||{};
+  Object.keys(rs).forEach(k=>{const a=srs[k],b=rs[k];if(!a||(b.t||0)>(a.t||0)){srs[k]=b;changed=true}});
+  (r.days||[]).forEach(d=>{if(!days.includes(d)){days.push(d);changed=true}});
+  days.sort();
+  if(days.length>90)days.splice(0,days.length-90);
+  const lt=store.get("wk2_tests",[]),seen=new Set(lt.map(x=>JSON.stringify(x)));
+  const add=(r.tests||[]).filter(x=>!seen.has(JSON.stringify(x)));
+  if(add.length){store.set("wk2_tests",[...lt,...add].sort((x,y)=>y.d<x.d?-1:y.d>x.d?1:0).slice(0,8));changed=true}
+  if(changed){store.set("wk2_srs",srs);store.set("wk2_days",days)}
+  return changed;
+}
 const views={home,drill,test,recite,plan,jobs:jobsView};
 function render(){
   const r=views[location.hash.slice(1)]?location.hash.slice(1):"home";

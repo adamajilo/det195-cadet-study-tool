@@ -95,6 +95,9 @@ button {
     font-size: .78rem
 }
 
+.acct .tg{background:transparent;color:#cdd8e6;border-color:#2c3d57;padding:3px 12px}
+.acct:empty{display:none}
+
 .nav {
     display: flex;
     gap: 4px;
