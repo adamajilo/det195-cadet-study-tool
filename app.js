@@ -457,24 +457,34 @@ function mergeProgress(r){
   if(changed){store.set("wk2_srs",srs);store.set("wk2_days",days)}
   return changed;
 }
-// Dropdown menu toggle handler
-document.addEventListener("click", e => {
+// Robust Dropdown Handler
+function initDropdown() {
   const btn = $("#moreBtn");
   const menu = $("#moreMenu");
   if (!btn || !menu) return;
 
-  if (btn.contains(e.target)) {
+  // Toggle on button click
+  btn.onclick = (e) => {
+    e.stopPropagation();
     menu.classList.toggle("show");
-  } else if (!menu.contains(e.target)) {
-    menu.classList.remove("show");
-  }
-});
+  };
 
-// Close dropdown on route change
-window.addEventListener("hashchange", () => {
-  const menu = $("#moreMenu");
-  if (menu) menu.classList.remove("show");
-});
+  // Close when clicking anywhere outside
+  document.addEventListener("click", (e) => {
+    if (!menu.contains(e.target) && !btn.contains(e.target)) {
+      menu.classList.remove("show");
+    }
+  });
+
+  // Close when clicking any link inside the menu
+  menu.querySelectorAll("a").forEach(a => {
+    a.onclick = () => menu.classList.remove("show");
+  });
+}
+
+// Call it once the DOM is ready (place inside app.js)
+document.addEventListener("DOMContentLoaded", initDropdown);
+// If app.js loads async, you can also just call initDropdown() directly at the bottom of app.js
 
 // Registered Views Mapping
 const views={home,drill,test,recite,plan,jobs:jobsView,account:accountView,leaderboard:leaderboardView};

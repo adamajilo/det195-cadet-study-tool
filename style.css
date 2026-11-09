@@ -195,6 +195,73 @@ button {
     display: none; /* Hide Recite & Test on tiny screens, put everything else in More */
   }
 }
+
+/* Navigation Split Styling */
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.nav-drop-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: inherit;
+  font: inherit;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nav-drop-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.nav-drop-content {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: #0b0f14;
+  min-width: 150px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  z-index: 100;
+  padding: 4px 0;
+}
+
+.nav-drop-content.show {
+  display: block;
+}
+
+.nav-drop-content a {
+  display: block;
+  padding: 10px 16px;
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.nav-drop-content a:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Mobile adjustments */
+@media (max-width: 600px) {
+  .nav a:not([data-r="home"]):not([data-r="drill"]) {
+    display: none; /* Hide Recite & Test on tiny screens, put everything else in More */
+  }
+}
+
 .chip-streak {
     font: 700 1.05rem var(--d);
     background: #1b2a42;
