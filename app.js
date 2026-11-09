@@ -416,6 +416,16 @@ function jobsView(){
 // Account Profile & Stats View
 function accountView(){
   const app=$("#app");
+
+  // Wait until Firebase finishes checking the saved session.
+  if(!window.authInitialized){
+    app.innerHTML=`
+      <h2 class="h">Account Settings</h2>
+      <p class="note">Checking your sign-in status...</p>
+    `;
+    return;
+  }
+
   const user=typeof window.getUser==="function"?window.getUser():null;
 
   if(!user){
@@ -899,3 +909,9 @@ if(!["All",...terms()].includes(cfg.term)){
 }
 
 loadJobs().then(render);
+
+window.addEventListener("auth-state-changed", () => {
+  if (location.hash === "#account") {
+    render();
+  }
+});

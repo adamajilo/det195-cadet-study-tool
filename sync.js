@@ -390,15 +390,22 @@
     };
 
     onAuthStateChanged(auth, async currentUser => {
-      user = currentUser;
-      paint();
+  user = currentUser;
 
-      if (user) {
-        const ok = await sync();
+  // Firebase has finished checking the saved sign-in session.
+  window.authInitialized = true;
 
-        if (ok) toast("Progress synced");
-      }
-    });
+  paint();
+
+  // Tell app.js to refresh the account page.
+  window.dispatchEvent(new Event("auth-state-changed"));
+
+  if (user) {
+    const ok = await sync();
+
+    if (ok) toast("Progress synced");
+  }
+});
 
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden && user) sync();
