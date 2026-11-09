@@ -641,9 +641,9 @@ window.viewCadetProfile = async userId => {
     </div>
   `;
 
-  $("#back-leaderboard").onclick = () => {
-    location.hash = "leaderboard";
-  };
+ $("#back-leaderboard").onclick = () => {
+  leaderboardView();
+};
 };
 
 
@@ -667,6 +667,38 @@ function mergeProgress(r){
   const add=(r.tests||[]).filter(x=>!seen.has(JSON.stringify(x)));
   if(add.length){store.set("wk2_tests",[...lt,...add].sort((x,y)=>y.d<x.d?-1:y.d>x.d?1:0).slice(0,8));changed=true}
   if(changed){store.set("wk2_srs",srs);store.set("wk2_days",days)}
+  // Merge weekly XP without double-counting.
+if (r.xp && r.xp.weekId) {
+  const currentWeek = window.getCurrentWeekId
+    ? window.getCurrentWeekId()
+    : today();
+
+  if (r.xp.weekId === currentWeek) {
+    const localXp = store.get("wk2_xp", {
+      weekId: currentWeek,
+      xp: 0
+    });
+
+    const mergedXp = Math.max(
+      localXp.weekId === currentWeek
+        ? Number(localXp.xp) || 0
+        : 0,
+      Number(r.xp.xp) || 0
+    );
+
+    if (
+      localXp.weekId !== currentWeek ||
+      localXp.xp !== mergedXp
+    ) {
+      store.set("wk2_xp", {
+        weekId: currentWeek,
+        xp: mergedXp
+      });
+
+      changed = true;
+    }
+  }
+}
   return changed;
 }
 

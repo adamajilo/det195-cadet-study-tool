@@ -65,10 +65,14 @@
     window.getCurrentWeekId = getCurrentWeekId;
 
     const getLocalProgress = () => ({
-      srs: store.get("wk2_srs", {}),
-      days: store.get("wk2_days", []),
-      tests: store.get("wk2_tests", [])
-    });
+  srs: store.get("wk2_srs", {}),
+  days: store.get("wk2_days", []),
+  tests: store.get("wk2_tests", []),
+  xp: store.get("wk2_xp", {
+    weekId: getCurrentWeekId(),
+    xp: 0
+  })
+});
 
     const getMetrics = () => {
       const cards = typeof C !== "undefined"
@@ -143,11 +147,12 @@
       const progress = getLocalProgress();
 
       await setDoc(doc(db, "users", user.uid), {
-        srs: JSON.stringify(progress.srs),
-        days: progress.days,
-        tests: JSON.stringify(progress.tests),
-        updated: Date.now()
-      }, { merge: true });
+  srs: JSON.stringify(progress.srs),
+  days: progress.days,
+  tests: JSON.stringify(progress.tests),
+  xp: progress.xp,
+  updated: Date.now()
+}, { merge: true });
     };
 
     // Only public profile information goes into publicProfiles/{uid}.
@@ -189,10 +194,11 @@
 
           if (typeof mergeProgress === "function") {
             const changed = mergeProgress({
-              srs: JSON.parse(data.srs || "{}"),
-              days: data.days || [],
-              tests: JSON.parse(data.tests || "[]")
-            });
+  srs: JSON.parse(data.srs || "{}"),
+  days: data.days || [],
+  tests: JSON.parse(data.tests || "[]"),
+  xp: data.xp || null
+});
 
             if (changed && typeof render === "function") {
               render();
