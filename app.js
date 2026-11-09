@@ -324,7 +324,7 @@ function loadJobs(){
     });
     JOBS.forEach(j=>{
       C.push({w:0,g:"AF Officer Codes",q:"AFSC "+j.code,a:j.title,kind:"job"});
-      if(j.sf)C.push({w:0,g:"SF Officer Codes",q:"Space Force "+j.code,a:j.title,kind:"job"});
+      if(j.sf)C.push({w:0,g:"Space Force Officer Codes",q:"Space Force "+j.code,a:j.title,kind:"job"});
     });
   });
 }
@@ -342,65 +342,59 @@ function jobsView(){
   $("#jsf").onclick=()=>{JF.sf=!JF.sf;$("#jsf").setAttribute("aria-pressed",JF.sf);draw()};
   draw();
 }
-const RANKS=[[45,"Cadet Colonel",[2,2,2,2]],[30,"Cadet Lieutenant Colonel",[2,2,2]],[21,"Cadet Major",[3,1.4,3]],[14,"Cadet Captain",[2.4,2.4]],[7,"Cadet First Lieutenant",[1.4,3]],[3,"Cadet Second Lieutenant",[3]]];
-const rankFor=n=>RANKS.find(r=>n>=r[0]);
-const nextRank=r=>RANKS[RANKS.indexOf(r)-1];
-function rankIcon(r){
-  const bars=r[2],gap=2.2,total=bars.reduce((a,b)=>a+b,0)+gap*(bars.length-1);
-  let y=(24-total)/2;
-  const rects=bars.map(h=>{const o=`<rect x="5" y="${y.toFixed(2)}" width="14" height="${h}" rx=".6" fill="#dfe5ec"/>`;y+=h+gap;return o}).join("");
-  return`<svg class="rank-icon" viewBox="0 0 24 24" role="img" aria-label="${esc(r[1])}"><rect x="1.5" y="1.5" width="21" height="21" rx="3" fill="#0b0f14" stroke="#3a4656"/>${rects}</svg>`;
-}
-function mergeProgress(r){
-  let changed=false;
-  const rs=r.srs||{};
-  Object.keys(rs).forEach(k=>{const a=srs[k],b=rs[k];if(!a||(b.t||0)>(a.t||0)){srs[k]=b;changed=true}});
-  (r.days||[]).forEach(d=>{if(!days.includes(d)){days.push(d);changed=true}});
-  days.sort();
-  if(days.length>90)days.splice(0,days.length-90);
-  const lt=store.get("wk2_tests",[]),seen=new Set(lt.map(x=>JSON.stringify(x)));
-  const add=(r.tests||[]).filter(x=>!seen.has(JSON.stringify(x)));
-  if(add.length){store.set("wk2_tests",[...lt,...add].sort((x,y)=>y.d<x.d?-1:y.d>x.d?1:0).slice(0,8));changed=true}
-  if(changed){store.set("wk2_srs",srs);store.set("wk2_days",days)}
-  return changed;
-}
-const views={home,drill,test,recite,plan,jobs:jobsView};
-function render(){
-  const r=views[location.hash.slice(1)]?location.hash.slice(1):"home";
-  document.querySelectorAll("#nav a").forEach(a=>a.getAttribute("data-r")===r?a.setAttribute("aria-current","page"):a.removeAttribute("aria-current"));
-  const s=streak(),rk=rankFor(s),el=$("#streak");
-  el.innerHTML=(rk?rankIcon(rk)+" ":"")+esc(s?s+" day streak":"No streak yet");
-  el.title=rk?rk[1]+" streak rank"+(nextRank(rk)?". Next rank at "+nextRank(rk)[0]+" days.":"."):"";
-  if(r!=="test")clearInterval(tick);
-  views[r]();
-  termSw();
-}
-window.addEventListener("hashchange",()=>{D=D&&location.hash==="#drill"?D:null;RC=RC&&location.hash==="#drill"?RC:null;T=T&&location.hash==="#test"?T:null;RS=null;render()});
-document.addEventListener("keydown",e=>{
-  if(location.hash!=="#drill"||!D||!D.q[D.i]||e.target.tagName==="BUTTON"&&e.key===" ")return;
-  const c=D.q[D.i];
-  if(e.key===" "){e.preventDefault();D.on=!D.on;render()}
-  else if(D.on&&e.key==="1"){rate(c,false);D.miss++;D.q.splice(Math.min(D.q.length,D.i+4),0,c);D.i++;D.on=false;render()}
-  else if(D.on&&e.key==="2"){rate(c,true);D.hit++;D.i++;D.on=false;render()}
-});
-const baseTitle=document.title;
-document.addEventListener("visibilitychange",()=>{document.title=document.hidden?"Cadet, come back":baseTitle});
-console.log("%cBriefing Room","font:700 20px sans-serif;color:#ff5a36","Built for Det 195. Found something? Good. Now go study.");
-function toast(m){const t=document.createElement("div");t.className="toast";t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2200)}
-function setNight(on){if(on)document.documentElement.dataset.theme="night";else delete document.documentElement.dataset.theme;cfg.night=on;saveCfg()}
-if(cfg.night)document.documentElement.dataset.theme="night";
-(function(){
-  const b=document.querySelector(".brand");if(!b)return;
-  let n=0,t=0;
-  b.addEventListener("click",()=>{const now=Date.now();n=now-t<1500?n+1:1;t=now;if(n>=5){n=0;const on=!cfg.night;setNight(on);toast(on?"Night ops on":"Night ops off")}});
-})();
-if(!["All",...terms()].includes(cfg.term)){cfg.term=terms().length>1?termOf(nextTest()):"All";saveCfg()}
-loadJobs().then(render);
 
-// Add to app.js
+// Account Profile View (Allows name and avatar updates)
+function accountView() {
+  const app = $("#app");
+  const user = typeof window.getUser === "function" ? window.getUser() : null;
+
+  if (!user) {
+    app.innerHTML = `
+      <h2 class="h">Account Settings</h2>
+      <p class="note">Please sign in using the button at the top right to manage your profile.</p>
+    `;
+    return;
+  }
+
+  const currentName = user.displayName || user.email.split("@")[0];
+  const currentPhoto = user.photoURL || "";
+
+  app.innerHTML = `
+    <h2 class="h">Account Settings</h2>
+    <p class="sub">Customize how your name and avatar appear on the leaderboard.</p>
+    <div class="qcard" style="max-width:400px; margin:0 auto; text-align:left;">
+      <label style="display:block; margin-bottom:12px;">
+        <b>Display Name</b>
+        <input type="text" id="acc-name" class="ti" value="${esc(currentName)}" placeholder="Enter your display name">
+      </label>
+      <label style="display:block; margin-bottom:12px;">
+        <b>Profile Picture URL</b>
+        <input type="url" id="acc-photo" class="ti" value="${esc(currentPhoto)}" placeholder="https://example.com/photo.jpg">
+      </label>
+      <div class="acts">
+        <button class="btn go" id="save-profile">Save Changes</button>
+      </div>
+    </div>
+  `;
+
+  $("#save-profile").onclick = async () => {
+    const name = $("#acc-name").value.trim();
+    const photo = $("#acc-photo").value.trim();
+    if (!name) {
+      toast("Name cannot be empty");
+      return;
+    }
+    if (typeof window.updateUserProfile === "function") {
+      await window.updateUserProfile(name, photo);
+      render();
+    }
+  };
+}
+
+// Leaderboard View
 async function leaderboardView() {
   const app = $("#app");
-  app.innerHTML = `<h2 class="h">Leaderboard</h2><p class="sub">Top cadets by total cards mastered across all topics.</p><div id="lb-loading" class="note">Loading ranks...</div><div id="lb-table"></div>`;
+  app.innerHTML = `<h2 class="h">Leaderboard</h2><p class="sub">Top cadets by total cards mastered across all topics.</p><div id="lb-loading" class="note">Loading ranks...</div>`;
   
   if (typeof window.fetchLeaderboard !== "function") {
     $("#lb-loading").textContent = "Sign in with Firebase to participate in the leaderboard.";
@@ -441,3 +435,60 @@ async function leaderboardView() {
   `;
 }
 
+const RANKS=[[45,"Cadet Colonel",[2,2,2,2]],[30,"Cadet Lieutenant Colonel",[2,2,2]],[21,"Cadet Major",[3,1.4,3]],[14,"Cadet Captain",[2.4,2.4]],[7,"Cadet First Lieutenant",[1.4,3]],[3,"Cadet Second Lieutenant",[3]]];
+const rankFor=n=>RANKS.find(r=>n>=r[0]);
+const nextRank=r=>RANKS[RANKS.indexOf(r)-1];
+function rankIcon(r){
+  const bars=r[2],gap=2.2,total=bars.reduce((a,b)=>a+b,0)+gap*(bars.length-1);
+  let y=(24-total)/2;
+  const rects=bars.map(h=>{const o=`<rect x="5" y="${y.toFixed(2)}" width="14" height="${h}" rx=".6" fill="#dfe5ec"/>`;y+=h+gap;return o}).join("");
+  return`<svg class="rank-icon" viewBox="0 0 24 24" role="img" aria-label="${esc(r[1])}"><rect x="1.5" y="1.5" width="21" height="21" rx="3" fill="#0b0f14" stroke="#3a4656"/>${rects}</svg>`;
+}
+function mergeProgress(r){
+  let changed=false;
+  const rs=r.srs||{};
+  Object.keys(rs).forEach(k=>{const a=srs[k],b=rs[k];if(!a||(b.t||0)>(a.t||0)){srs[k]=b;changed=true}});
+  (r.days||[]).forEach(d=>{if(!days.includes(d)){days.push(d);changed=true}});
+  days.sort();
+  if(days.length>90)days.splice(0,days.length-90);
+  const lt=store.get("wk2_tests",[]),seen=new Set(lt.map(x=>JSON.stringify(x)));
+  const add=(r.tests||[]).filter(x=>!seen.has(JSON.stringify(x)));
+  if(add.length){store.set("wk2_tests",[...lt,...add].sort((x,y)=>y.d<x.d?-1:y.d>x.d?1:0).slice(0,8));changed=true}
+  if(changed){store.set("wk2_srs",srs);store.set("wk2_days",days)}
+  return changed;
+}
+
+// Registered Views Mapping
+const views={home,drill,test,recite,plan,jobs:jobsView,account:accountView,leaderboard:leaderboardView};
+
+function render(){
+  const r=views[location.hash.slice(1)]?location.hash.slice(1):"home";
+  document.querySelectorAll("#nav a").forEach(a=>a.getAttribute("data-r")===r?a.setAttribute("aria-current","page"):a.removeAttribute("aria-current"));
+  const s=streak(),rk=rankFor(s),el=$("#streak");
+  el.innerHTML=(rk?rankIcon(rk)+" ":"")+esc(s?s+" day streak":"No streak yet");
+  el.title=rk?rk[1]+" streak rank"+(nextRank(rk)?". Next rank at "+nextRank(rk)[0]+" days.":"."):"";
+  if(r!=="test")clearInterval(tick);
+  views[r]();
+  termSw();
+}
+window.addEventListener("hashchange",()=>{D=D&&location.hash==="#drill"?D:null;RC=RC&&location.hash==="#drill"?RC:null;T=T&&location.hash==="#test"?T:null;RS=null;render()});
+document.addEventListener("keydown",e=>{
+  if(location.hash!=="#drill"||!D||!D.q[D.i]||e.target.tagName==="BUTTON"&&e.key===" ")return;
+  const c=D.q[D.i];
+  if(e.key===" "){e.preventDefault();D.on=!D.on;render()}
+  else if(D.on&&e.key==="1"){rate(c,false);D.miss++;D.q.splice(Math.min(D.q.length,D.i+4),0,c);D.i++;D.on=false;render()}
+  else if(D.on&&e.key==="2"){rate(c,true);D.hit++;D.i++;D.on=false;render()}
+});
+const baseTitle=document.title;
+document.addEventListener("visibilitychange",()=>{document.title=document.hidden?"Cadet, come back":baseTitle});
+console.log("%cBriefing Room","font:700 20px sans-serif;color:#ff5a36","Built for Det 195. Found something? Good. Now go study.");
+function toast(m){const t=document.createElement("div");t.className="toast";t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2200)}
+function setNight(on){if(on)document.documentElement.dataset.theme="night";else delete document.documentElement.dataset.theme;cfg.night=on;saveCfg()}
+if(cfg.night)document.documentElement.dataset.theme="night";
+(function(){
+  const b=document.querySelector(".brand");if(!b)return;
+  let n=0,t=0;
+  b.addEventListener("click",()=>{const now=Date.now();n=now-t<1500?n+1:1;t=now;if(n>=5){n=0;const on=!cfg.night;setNight(on);toast(on?"Night ops on":"Night ops off")}});
+})();
+if(!["All",...terms()].includes(cfg.term)){cfg.term=terms().length>1?termOf(nextTest()):"All";saveCfg()}
+loadJobs().then(render);

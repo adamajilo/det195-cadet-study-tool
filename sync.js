@@ -9,7 +9,7 @@
     const V = "10.12.2", base = "https://www.gstatic.com/firebasejs/" + V + "/";
     const [
       { initializeApp },
-      { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut },
+      { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, updateProfile },
       { getFirestore, doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs }
     ] = await Promise.all([
       import(base + "firebase-app.js"), 
@@ -21,26 +21,29 @@
     const box = document.getElementById("acct");
     let user = null, timer = null, busy = false, again = false;
 
-    // Render Account Auth UI
+    // Render Auth UI in Header
     const paint = () => {
       if (!box) return;
       box.innerHTML = user
         ? `<div class="acct-user">
-            <span class="user-email" title="${esc(user.email || "")}">${esc(user.displayName || user.email || "Cadet")}</span>
+            <a href="#account" class="user-link">
+              ${user.photoURL ? `<img src="${esc(user.photoURL)}" class="acct-avatar" alt="">` : ""}
+              <span>${esc(user.displayName || user.email.split("@")[0])}</span>
+            </a>
             <button class="tg" id="so">Sign out</button>
            </div>`
         : '<button class="tg" id="si">Sign in to sync</button>';
       
       const si = document.getElementById("si"), so = document.getElementById("so");
       if (si) si.onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch(() => toast("Sign-in cancelled"));
-      if (so) so.onclick = () => signOut(auth).then(() => toast("Signed out. Progress stays on this device."));
+      if (so) so.onclick = () => signOut(auth).then(() => toast("Signed out."));
     };
 
-    // Push local state & leaderboard data to Firestore
+    // Push User Profile & Spaced Repetition Stats to Firestore
     const push = async ref => {
-      const allCards = C.filter(visible);
+      const allCards = typeof C !== "undefined" ? C.filter(visible) : [];
       const masteredCount = allCards.filter(mastered).length;
-      const currentStreak = streak();
+      const currentStreak = typeof streak === "function" ? streak() : 0;
 
       await setDoc(ref, {
         displayName: user.displayName || user.email.split("@")[0] || "Cadet",
@@ -54,7 +57,6 @@
       }, { merge: true });
     };
 
-    // Synchronize data between local storage and cloud
     async function sync() {
       if (!user) return false;
       if (busy) { again = true; return false; }
@@ -82,7 +84,30 @@
       return ok;
     }
 
-    // Leaderboard Fetching API
+    // Expose Profile Update Handler
+    window.updateUserProfile = async (newName, newPhoto) => {
+      if (!auth.currentUser) return false;
+      try {
+        await updateProfile(auth.currentUser, {
+          displayName: newName,
+          photoURL: newPhoto
+        });
+        const ref = doc(db, "users", auth.currentUser.uid);
+        await setDoc(ref, {
+          displayName: newName,
+          photoURL: newPhoto
+        }, { merge: true });
+        paint();
+        toast("Profile updated!");
+        return true;
+      } catch (err) {
+        console.error("Profile update failed:", err);
+        toast("Failed to update profile");
+        return false;
+      }
+    };
+
+    // Fetch Leaderboard
     window.fetchLeaderboard = async () => {
       try {
         const q = query(collection(db, "users"), orderBy("mastered", "desc"), limit(25));
@@ -105,6 +130,7 @@
       }
     };
 
+    window.getUser = () => auth.currentUser;
     window.queueSync = () => { if (!user) return; clearTimeout(timer); timer = setTimeout(sync, 1500); };
     onAuthStateChanged(auth, u => { 
       user = u; 
