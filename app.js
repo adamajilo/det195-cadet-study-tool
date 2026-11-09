@@ -457,6 +457,24 @@ function mergeProgress(r){
   if(changed){store.set("wk2_srs",srs);store.set("wk2_days",days)}
   return changed;
 }
+// Dropdown menu toggle handler
+document.addEventListener("click", e => {
+  const btn = $("#moreBtn");
+  const menu = $("#moreMenu");
+  if (!btn || !menu) return;
+
+  if (btn.contains(e.target)) {
+    menu.classList.toggle("show");
+  } else if (!menu.contains(e.target)) {
+    menu.classList.remove("show");
+  }
+});
+
+// Close dropdown on route change
+window.addEventListener("hashchange", () => {
+  const menu = $("#moreMenu");
+  if (menu) menu.classList.remove("show");
+});
 
 // Registered Views Mapping
 const views={home,drill,test,recite,plan,jobs:jobsView,account:accountView,leaderboard:leaderboardView};

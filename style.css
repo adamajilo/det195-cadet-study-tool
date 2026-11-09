@@ -130,7 +130,71 @@ button {
     color: #fff;
     border-bottom-color: var(--accent)
 }
+/* Navigation Split Styling */
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
+.nav-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.nav-drop-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: inherit;
+  font: inherit;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nav-drop-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.nav-drop-content {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: #0b0f14;
+  min-width: 150px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  z-index: 100;
+  padding: 4px 0;
+}
+
+.nav-drop-content.show {
+  display: block;
+}
+
+.nav-drop-content a {
+  display: block;
+  padding: 10px 16px;
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.nav-drop-content a:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Mobile adjustments */
+@media (max-width: 600px) {
+  .nav a:not([data-r="home"]):not([data-r="drill"]) {
+    display: none; /* Hide Recite & Test on tiny screens, put everything else in More */
+  }
+}
 .chip-streak {
     font: 700 1.05rem var(--d);
     background: #1b2a42;
@@ -883,3 +947,39 @@ button:disabled {
 
 #jq{flex:1;min-width:200px;font:1rem var(--b);padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
 @media (max-width:760px){.nav a{padding:6px 5px;font-size:.7rem}}
+/* Account & Avatar Styling */
+.acct-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  color: inherit;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.user-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.acct-avatar, .lb-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  vertical-align: middle;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Leaderboard Specifics */
+#lb-table {
+  margin-top: 12px;
+}
