@@ -49,51 +49,35 @@
 
     // Push User Profile, Spaced Repetition Stats & Weekly Metrics to Firestore
     const push = async ref => {
-      if (!user) return;
-      const allCards = (typeof C !== "undefined" && typeof visible === "function") ? C.filter(visible) : [];
-      const masteredCount = (typeof mastered === "function") ? allCards.filter(mastered).length : 0;
-      const currentStreak = (typeof streak === "function") ? streak() : 0;
-      
-      const weekId = getCurrentWeekId();
-      
-      // Pull existing document to handle weekly rollover
-      const snap = await getDoc(ref);
-      let weeklyData = { weekId, mastered: 0, xp: 0 };
-      
-      if (snap.exists()) {
-        const existing = snap.data();
-        if (existing.weekly && existing.weekly.weekId === weekId) {
-          weeklyData = existing.weekly;
-          const prevMastered = existing.mastered || 0;
-          if (masteredCount > prevMastered) {
-            const diff = masteredCount - prevMastered;
-            weeklyData.mastered += diff;
-            weeklyData.xp += diff * 50; // 50 XP per mastered card
-          }
-        } else {
-          // New week started! Reset weekly stats
-          weeklyData = { weekId, mastered: 0, xp: currentStreak * 25 };
-        }
-      } else {
-        weeklyData.xp = currentStreak * 25;
-      }
+  if (!user) return;
+  const allCards = (typeof C !== "undefined" && typeof visible === "function") ? C.filter(visible) : [];
+  const masteredCount = (typeof mastered === "function") ? allCards.filter(mastered).length : 0;
+  const currentStreak = (typeof streak === "function") ? streak() : 0;
+  
+  const weekId = getCurrentWeekId();
+  const localXp = (typeof store !== "undefined") ? store.get("wk2_xp", { weekId, xp: 0 }) : { weekId, xp: 0 };
+  const currentXp = localXp.weekId === weekId ? localXp.xp : 0;
+  
+  const snap = await getDoc(ref);
+  let weeklyData = { weekId, mastered: 0, xp: currentXp };
 
-      const safeSrs = (typeof srs !== "undefined") ? JSON.stringify(srs) : "{}";
-      const safeDays = (typeof days !== "undefined") ? [...days] : [];
-      const safeTests = (typeof store !== "undefined") ? JSON.stringify(store.get("wk2_tests", [])) : "[]";
+  if (snap.exists()) {
+    const existing = snap.data();
+    if (existing.weekly && existing.weekly.weekId === weekId) {
+      weeklyData.mastered = Math.max(existing.weekly.mastered || 0, masteredCount);
+      weeklyData.xp = Math.max(existing.weekly.xp || 0, currentXp);
+    }
+  }
 
-      await setDoc(ref, {
-        displayName: user.displayName || user.email.split("@")[0] || "Cadet",
-        photoURL: user.photoURL || "",
-        mastered: masteredCount,
-        streak: currentStreak,
-        weekly: weeklyData,
-        srs: safeSrs,
-        days: safeDays,
-        tests: safeTests,
-        updated: Date.now()
-      }, { merge: true });
-    };
+  await setDoc(ref, {
+    displayName: user.displayName || user.email.split("@")[0] || "Cadet",
+    photoURL: user.photoURL || "",
+    mastered: masteredCount,
+    streak: currentStreak,
+    weekly: weeklyData,
+    updated: Date.now()
+  }, { merge: true });
+};
 
     async function sync() {
       if (!user) return false;
@@ -161,37 +145,35 @@
     };
 
     // Fetch Weekly Leaderboard
-    window.fetchWeeklyLeaderboard = async () => {
-      try {
-        const weekId = getCurrentWeekId();
-        const q = query(
-          collection(db, "users"), 
-          orderBy("weekly.xp", "desc"), 
-          orderBy("weekly.mastered", "desc"), 
-          limit(25)
-        );
-        const querySnapshot = await getDocs(q);
-        const list = [];
-        querySnapshot.forEach(docSnap => {
-          const data = docSnap.data();
-          // Filter out records from previous weeks if query fallback returns them
-          if (data.weekly && data.weekly.weekId === weekId) {
-            list.push({
-              id: docSnap.id,
-              name: data.displayName || "Anonymous Cadet",
-              photo: data.photoURL || "",
-              xpWeekly: data.weekly?.xp || 0,
-              masteredWeekly: data.weekly?.mastered || 0,
-              streak: data.streak || 0
-            });
-          }
+  window.fetchWeeklyLeaderboard = async () => {
+  try {
+    const weekId = getCurrentWeekId();
+    const q = query(
+      collection(db, "users"),
+      orderBy("weekly.xp", "desc"),
+      limit(25)
+    );
+    const querySnapshot = await getDocs(q);
+    const list = [];
+    querySnapshot.forEach(docSnap => {
+      const data = docSnap.data();
+      if (data.weekly && data.weekly.weekId === weekId) {
+        list.push({
+          id: docSnap.id,
+          name: data.displayName || "Anonymous Cadet",
+          photo: data.photoURL || "",
+          xpWeekly: data.weekly?.xp || 0,
+          masteredWeekly: data.weekly?.mastered || 0,
+          streak: data.streak || 0
         });
-        return list;
-      } catch (err) {
-        console.error("Error fetching weekly leaderboard:", err);
-        return [];
       }
-    };
+    });
+    return list;
+  } catch (err) {
+    console.error("Error fetching weekly leaderboard:", err);
+    return [];
+  }
+};
 
     // Fetch Individual Cadet Profile for Inspection
     window.fetchUserProfile = async (userId) => {

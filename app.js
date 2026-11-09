@@ -31,10 +31,27 @@ const box=c=>(srs[keyOf(c)]||{b:0}).b;
 const isDue=c=>{const s=srs[keyOf(c)];return !s||s.d<=today()};
 const mastered=c=>box(c)>=4;
 
-function rate(c,ok){
-  const k=keyOf(c);const prev=srs[k]?srs[k].b:0;
-  const b=ok?Math.min(5,Math.max(2,prev+1)):1;
-  srs[k]={b,d:addDays(INTERVAL[b]),t:Date.now()};saveSrs();touchDay();
+function rate(c, ok) {
+  const k = keyOf(c);
+  const prev = srs[k] ? srs[k].b : 0;
+  const b = ok ? Math.min(5, Math.max(2, prev + 1)) : 1;
+  srs[k] = { b, d: addDays(INTERVAL[b]), t: Date.now() };
+  
+  // Award Weekly XP stored locally
+  const currentWeek = (typeof getCurrentWeekId === "function") ? getCurrentWeekId() : today();
+  const xpStore = store.get("wk2_xp", { weekId: currentWeek, xp: 0 });
+  if (xpStore.weekId !== currentWeek) {
+    xpStore.weekId = currentWeek;
+    xpStore.xp = 0;
+  }
+  if (ok) {
+    xpStore.xp += 10; // +10 XP for getting a card right
+    if (b >= 4 && prev < 4) xpStore.xp += 50; // +50 XP bonus for mastery
+  }
+  store.set("wk2_xp", xpStore);
+
+  saveSrs();
+  touchDay();
 }
 
 function photos(c){
