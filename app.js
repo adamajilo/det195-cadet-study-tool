@@ -396,3 +396,48 @@ if(cfg.night)document.documentElement.dataset.theme="night";
 })();
 if(!["All",...terms()].includes(cfg.term)){cfg.term=terms().length>1?termOf(nextTest()):"All";saveCfg()}
 loadJobs().then(render);
+
+// Add to app.js
+async function leaderboardView() {
+  const app = $("#app");
+  app.innerHTML = `<h2 class="h">Leaderboard</h2><p class="sub">Top cadets by total cards mastered across all topics.</p><div id="lb-loading" class="note">Loading ranks...</div><div id="lb-table"></div>`;
+  
+  if (typeof window.fetchLeaderboard !== "function") {
+    $("#lb-loading").textContent = "Sign in with Firebase to participate in the leaderboard.";
+    return;
+  }
+
+  const data = await window.fetchLeaderboard();
+  if (!data.length) {
+    $("#lb-loading").textContent = "No leaderboard records found yet.";
+    return;
+  }
+
+  const rows = data.map((item, index) => `
+    <tr>
+      <td><b>#${index + 1}</b></td>
+      <td>${item.photo ? `<img src="${esc(item.photo)}" class="lb-avatar" alt="">` : ""}${esc(item.name)}</td>
+      <td><b>${item.mastered}</b> cards</td>
+      <td>${item.streak} days</td>
+    </tr>
+  `).join("");
+
+  app.innerHTML = `
+    <h2 class="h">Leaderboard</h2>
+    <p class="sub">Top cadets by total cards mastered across all topics.</p>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr>
+            <th>RANK</th>
+            <th>CADET</th>
+            <th>MASTERED</th>
+            <th>STREAK</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
