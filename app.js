@@ -420,11 +420,48 @@ function accountView() {
   };
 }
 
-// Weekly Leaderboard View with Clickable Cadet Profiles
+// Weekly Leaderboard View with Live Countdown & Clickable Profiles
 async function leaderboardView() {
   const app = $("#app");
-  app.innerHTML = `<h2 class="h">Weekly Leaderboard</h2><p class="sub">Top cadets by weekly XP and cards mastered. Resets every Sunday.</p><div id="lb-loading" class="note">Loading weekly ranks...</div>`;
   
+  // Helper to calculate time remaining until next Sunday midnight
+  const getTimeRemaining = () => {
+    const now = new Date();
+    const nextSunday = new Date(now);
+    const day = now.getDay(); // 0 is Sunday
+    const daysUntilSunday = (7 - day) % 7 || 7;
+    nextSunday.setDate(now.getDate() + daysUntilSunday);
+    nextSunday.setHours(0, 0, 0, 0);
+    
+    const diff = nextSunday - now;
+    if (diff <= 0) return "Resetting...";
+    
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    
+    return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+  };
+
+  app.innerHTML = `
+    <h2 class="h">Weekly Leaderboard</h2>
+    <p class="sub">Top cadets by weekly XP and cards mastered. Resets every Sunday.</p>
+    <div id="lb-timer" class="note" style="margin-bottom: 14px; font-weight: 600; color: var(--accent);">
+      Reset in: ${getTimeRemaining()}
+    </div>
+    <div id="lb-loading" class="note">Loading weekly ranks...</div>
+  `;
+
+  // Start live countdown interval for this view
+  if (window.lbInterval) clearInterval(window.lbInterval);
+  window.lbInterval = setInterval(() => {
+    const timerEl = document.getElementById("lb-timer");
+    if (timerEl) {
+      timerEl.textContent = `Reset in: ${getTimeRemaining()}`;
+    }
+  }, 1000);
+
   if (typeof window.fetchWeeklyLeaderboard !== "function") {
     $("#lb-loading").textContent = "Sign in with Firebase to participate in the leaderboard.";
     return;
@@ -453,6 +490,9 @@ async function leaderboardView() {
   app.innerHTML = `
     <h2 class="h">Weekly Leaderboard</h2>
     <p class="sub">Top cadets by weekly XP and cards mastered. Resets every Sunday.</p>
+    <div id="lb-timer" class="note" style="margin-bottom: 14px; font-weight: 600; color: var(--accent);">
+      Reset in: ${getTimeRemaining()}
+    </div>
     <div class="tw">
       <table>
         <thead>
