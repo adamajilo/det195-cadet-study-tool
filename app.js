@@ -391,7 +391,7 @@ function accountView() {
   };
 }
 
-// Leaderboard View
+// Leaderboard View with explicit flex spacing
 async function leaderboardView() {
   const app = $("#app");
   app.innerHTML = `<h2 class="h">Leaderboard</h2><p class="sub">Top cadets by total cards mastered across all topics.</p><div id="lb-loading" class="note">Loading ranks...</div>`;
@@ -410,7 +410,12 @@ async function leaderboardView() {
   const rows = data.map((item, index) => `
     <tr>
       <td><b>#${index + 1}</b></td>
-      <td>${item.photo ? `<img src="${esc(item.photo)}" class="lb-avatar" alt="">` : ""}${esc(item.name)}</td>
+      <td>
+        <div class="lb-user">
+          ${item.photo ? `<img src="${esc(item.photo)}" class="lb-avatar" alt="">` : ""}
+          <span>${esc(item.name)}</span>
+        </div>
+      </td>
       <td><b>${item.mastered}</b> cards</td>
       <td>${item.streak} days</td>
     </tr>
@@ -434,7 +439,6 @@ async function leaderboardView() {
     </div>
   `;
 }
-
 const RANKS=[[45,"Cadet Colonel",[2,2,2,2]],[30,"Cadet Lieutenant Colonel",[2,2,2]],[21,"Cadet Major",[3,1.4,3]],[14,"Cadet Captain",[2.4,2.4]],[7,"Cadet First Lieutenant",[1.4,3]],[3,"Cadet Second Lieutenant",[3]]];
 const rankFor=n=>RANKS.find(r=>n>=r[0]);
 const nextRank=r=>RANKS[RANKS.indexOf(r)-1];

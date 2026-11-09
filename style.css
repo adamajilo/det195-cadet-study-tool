@@ -156,18 +156,21 @@ button:disabled {
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* Leaderboard Spacing Fixes */
+/* Leaderboard Row Flex Spacing */
+.lb-user {
+  display: flex;
+  align-items: center;
+  gap: 12px; /* Forces clear separation between avatar and name */
+}
+
 .lb-avatar {
   width: 28px;
   height: 28px;
   border-radius: 50%;
   object-fit: cover;
-  vertical-align: middle;
-  margin-right: 20px; /* Adds space between avatar and name */
-  padding-right: 8px; /* Additional padding for better spacing */
+  flex-shrink: 0;
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
-
 /* Expand Leaderboard Table Row Spacing */
 #lb-table th, 
 #lb-table td, 
