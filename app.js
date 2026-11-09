@@ -3,7 +3,7 @@ const $=(s,r=document)=>r.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
 const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
 // Account-specific storage for study progress.
-const ACCOUNT_KEYS=new Set([
+const ACCOUNT_STORAGE_KEYS=new Set([
   "wk2_srs",
   "wk2_days",
   "wk2_tests",
@@ -14,36 +14,28 @@ const ACCOUNT_KEYS=new Set([
 
 let activeAccountUid=null;
 
+const storageKey=k=>
+  ACCOUNT_STORAGE_KEYS.has(k)&&activeAccountUid
+    ?`wk2_account_${activeAccountUid}_${k}`
+    :k;
+
 const store={
   get(k,d){
     try{
-      const key=ACCOUNT_KEYS.has(k)&&activeAccountUid
-        ?`wk2_account_${activeAccountUid}_${k}`
-        :k;
-
-      const v=localStorage.getItem(key);
-      return v!==null?JSON.parse(v):d;
+      const v=localStorage.getItem(storageKey(k));
+      return v?JSON.parse(v):d;
     }catch(e){
       return d;
     }
   },
-
   set(k,v){
     try{
-      const key=ACCOUNT_KEYS.has(k)&&activeAccountUid
-        ?`wk2_account_${activeAccountUid}_${k}`
-        :k;
-
-      localStorage.setItem(key,JSON.stringify(v));
-    }catch(e){
-      console.error("Storage error:",e);
-    }
+      localStorage.setItem(storageKey(k),JSON.stringify(v));
+    }catch(e){}
   },
-
   setAccount(uid){
     activeAccountUid=uid||null;
   },
-
   getAccount(){
     return activeAccountUid;
   }
@@ -60,7 +52,20 @@ const fmt=s=>new Date(s+"T00:00").toLocaleDateString("en-US",{weekday:"short",mo
 const cfg=Object.assign({zh:true,ac:false,rev:false},store.get("wk2_cfg",{}));
 const srs=store.get("wk2_srs",{});
 const days=store.get("wk2_days",[]);
+window.activateAccountStorage=uid=>{
+  const nextUid=uid||null;
 
+  if(store.getAccount()===nextUid)return;
+
+  store.setAccount(nextUid);
+
+  const savedSrs=store.get("wk2_srs",{});
+  Object.keys(srs).forEach(k=>delete srs[k]);
+  Object.assign(srs,savedSrs);
+
+  const savedDays=store.get("wk2_days",[]);
+  days.splice(0,days.length,...savedDays);
+};
 const INTERVAL=[0,0,1,3,7,14];
 
 // Switch the active local progress to the selected Firebase account.

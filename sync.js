@@ -392,17 +392,15 @@
   onAuthStateChanged(auth, async currentUser => {
   user = currentUser;
 
-  // Switch storage before downloading or uploading progress.
+  // Activate this account's private local storage.
   if(typeof window.activateAccountStorage==="function"){
-    window.activateAccountStorage(user?.uid||null);
+    window.activateAccountStorage(currentUser?.uid||null);
   }
 
-  // Firebase has finished checking the saved sign-in session.
   window.authInitialized = true;
 
   paint();
 
-  // Refresh the application after changing accounts.
   window.dispatchEvent(new Event("auth-state-changed"));
 
   if (user) {
