@@ -457,26 +457,24 @@ function mergeProgress(r){
   if(changed){store.set("wk2_srs",srs);store.set("wk2_days",days)}
   return changed;
 }
+
 // Robust Dropdown Handler for Mobile and Desktop
 function initDropdown() {
   const btn = document.getElementById("moreBtn");
   const menu = document.getElementById("moreMenu");
   if (!btn || !menu) return;
 
-  // Toggle on click/tap
   btn.onclick = (e) => {
     e.stopPropagation();
     menu.classList.toggle("show");
   };
 
-  // Close when tapping outside
   document.addEventListener("click", (e) => {
     if (!menu.contains(e.target) && !btn.contains(e.target)) {
       menu.classList.remove("show");
     }
   });
 
-  // Close when selecting a link
   menu.querySelectorAll("a").forEach(a => {
     a.onclick = () => menu.classList.remove("show");
   });
@@ -489,14 +487,20 @@ const views={home,drill,test,recite,plan,jobs:jobsView,account:accountView,leade
 
 function render(){
   const r=views[location.hash.slice(1)]?location.hash.slice(1):"home";
-  document.querySelectorAll("#nav a").forEach(a=>a.getAttribute("data-r")===r?a.setAttribute("aria-current","page"):a.removeAttribute("aria-current"));
+  document.querySelectorAll("#nav a, .nav-drop-content a").forEach(a=>{
+    if(a.getAttribute("data-r")===r) a.setAttribute("aria-current","page");
+    else a.removeAttribute("aria-current");
+  });
   const s=streak(),rk=rankFor(s),el=$("#streak");
-  el.innerHTML=(rk?rankIcon(rk)+" ":"")+esc(s?s+" day streak":"No streak yet");
-  el.title=rk?rk[1]+" streak rank"+(nextRank(rk)?". Next rank at "+nextRank(rk)[0]+" days.":"."):"";
+  if(el){
+    el.innerHTML=(rk?rankIcon(rk)+" ":"")+esc(s?s+" day streak":"No streak yet");
+    el.title=rk?rk[1]+" streak rank"+(nextRank(rk)?". Next rank at "+nextRank(rk)[0]+" days.":"."):"";
+  }
   if(r!=="test")clearInterval(tick);
   views[r]();
   termSw();
 }
+
 window.addEventListener("hashchange",()=>{D=D&&location.hash==="#drill"?D:null;RC=RC&&location.hash==="#drill"?RC:null;T=T&&location.hash==="#test"?T:null;RS=null;render()});
 document.addEventListener("keydown",e=>{
   if(location.hash!=="#drill"||!D||!D.q[D.i]||e.target.tagName==="BUTTON"&&e.key===" ")return;
@@ -505,16 +509,48 @@ document.addEventListener("keydown",e=>{
   else if(D.on&&e.key==="1"){rate(c,false);D.miss++;D.q.splice(Math.min(D.q.length,D.i+4),0,c);D.i++;D.on=false;render()}
   else if(D.on&&e.key==="2"){rate(c,true);D.hit++;D.i++;D.on=false;render()}
 });
+
 const baseTitle=document.title;
 document.addEventListener("visibilitychange",()=>{document.title=document.hidden?"Cadet, come back":baseTitle});
 console.log("%cBriefing Room","font:700 20px sans-serif;color:#ff5a36","Built for Det 195. Found something? Good. Now go study.");
-function toast(m){const t=document.createElement("div");t.className="toast";t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2200)}
-function setNight(on){if(on)document.documentElement.dataset.theme="night";else delete document.documentElement.dataset.theme;cfg.night=on;saveCfg()}
+
+function toast(m){
+  const t=document.createElement("div");
+  t.className="toast";
+  t.textContent=m;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),2200);
+}
+
+function setNight(on){
+  if(on)document.documentElement.dataset.theme="night";
+  else delete document.documentElement.dataset.theme;
+  cfg.night=on;
+  saveCfg();
+}
+
 if(cfg.night)document.documentElement.dataset.theme="night";
+
 (function(){
-  const b=document.querySelector(".brand");if(!b)return;
+  const b=document.querySelector(".brand");
+  if(!b)return;
   let n=0,t=0;
-  b.addEventListener("click",()=>{const now=Date.now();n=now-t<1500?n+1:1;t=now;if(n>=5){n=0;const on=!cfg.night;setNight(on);toast(on?"Night ops on":"Night ops off")}});
+  b.addEventListener("click",()=>{
+    const now=Date.now();
+    n=now-t<1500?n+1:1;
+    t=now;
+    if(n>=5){
+      n=0;
+      const on=!cfg.night;
+      setNight(on);
+      toast(on?"Night ops on":"Night ops off");
+    }
+  });
 })();
-if(!["All",...terms()].includes(cfg.term)){cfg.term=terms().length>1?termOf(nextTest()):"All";saveCfg()}
+
+if(!["All",...terms()].includes(cfg.term)){
+  cfg.term=terms().length>1?termOf(nextTest()):"All";
+  saveCfg();
+}
+
 loadJobs().then(render);

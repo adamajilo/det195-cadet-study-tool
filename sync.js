@@ -39,20 +39,25 @@
       if (so) so.onclick = () => signOut(auth).then(() => toast("Signed out."));
     };
 
-    // Push User Profile & Spaced Repetition Stats to Firestore
+    // Push User Profile & Spaced Repetition Stats to Firestore with Safe Guards
     const push = async ref => {
-      const allCards = typeof C !== "undefined" ? C.filter(visible) : [];
-      const masteredCount = allCards.filter(mastered).length;
-      const currentStreak = typeof streak === "function" ? streak() : 0;
+      if (!user) return;
+      const allCards = (typeof C !== "undefined" && typeof visible === "function") ? C.filter(visible) : [];
+      const masteredCount = (typeof mastered === "function") ? allCards.filter(mastered).length : 0;
+      const currentStreak = (typeof streak === "function") ? streak() : 0;
+      
+      const safeSrs = (typeof srs !== "undefined") ? JSON.stringify(srs) : "{}";
+      const safeDays = (typeof days !== "undefined") ? [...days] : [];
+      const safeTests = (typeof store !== "undefined") ? JSON.stringify(store.get("wk2_tests", [])) : "[]";
 
       await setDoc(ref, {
         displayName: user.displayName || user.email.split("@")[0] || "Cadet",
         photoURL: user.photoURL || "",
         mastered: masteredCount,
         streak: currentStreak,
-        srs: JSON.stringify(srs),
-        days: [...days],
-        tests: JSON.stringify(store.get("wk2_tests", [])),
+        srs: safeSrs,
+        days: safeDays,
+        tests: safeTests,
         updated: Date.now()
       }, { merge: true });
     };
@@ -67,16 +72,20 @@
         const snap = await getDoc(ref);
         if (snap.exists()) {
           const d = snap.data();
-          if (mergeProgress({
-            srs: JSON.parse(d.srs || "{}"),
-            days: d.days || [],
-            tests: JSON.parse(d.tests || "[]")
-          })) render();
+          if (typeof mergeProgress === "function" && d.srs) {
+            if (mergeProgress({
+              srs: JSON.parse(d.srs || "{}"),
+              days: d.days || [],
+              tests: JSON.parse(d.tests || "[]")
+            }) && typeof render === "function") {
+              render();
+            }
+          }
         }
         await push(ref);
         ok = true;
       } catch (e) {
-        console.warn("Sync failed", e);
+        console.warn("Sync failed:", e);
       } finally {
         busy = false;
         if (again) { again = false; sync(); }
@@ -132,11 +141,17 @@
 
     window.getUser = () => auth.currentUser;
     window.queueSync = () => { if (!user) return; clearTimeout(timer); timer = setTimeout(sync, 1500); };
+    
     onAuthStateChanged(auth, u => { 
       user = u; 
       paint(); 
-      if (u) sync().then(ok => toast(ok ? "Progress synced" : "Could not sync, will retry")); 
+      if (u) {
+        sync().then(ok => {
+          if (ok) toast("Progress synced");
+        });
+      } 
     });
+
     document.addEventListener("visibilitychange", () => { if (!document.hidden) sync(); });
     paint();
   } catch (err) {
