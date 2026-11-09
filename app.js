@@ -2,7 +2,52 @@
 const $=(s,r=document)=>r.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
 const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
-const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+// Account-specific storage for study progress.
+const ACCOUNT_KEYS=new Set([
+  "wk2_srs",
+  "wk2_days",
+  "wk2_tests",
+  "wk2_xp",
+  "wk2_total_xp",
+  "wk_known"
+]);
+
+let activeAccountUid=null;
+
+const store={
+  get(k,d){
+    try{
+      const key=ACCOUNT_KEYS.has(k)&&activeAccountUid
+        ?`wk2_account_${activeAccountUid}_${k}`
+        :k;
+
+      const v=localStorage.getItem(key);
+      return v!==null?JSON.parse(v):d;
+    }catch(e){
+      return d;
+    }
+  },
+
+  set(k,v){
+    try{
+      const key=ACCOUNT_KEYS.has(k)&&activeAccountUid
+        ?`wk2_account_${activeAccountUid}_${k}`
+        :k;
+
+      localStorage.setItem(key,JSON.stringify(v));
+    }catch(e){
+      console.error("Storage error:",e);
+    }
+  },
+
+  setAccount(uid){
+    activeAccountUid=uid||null;
+  },
+
+  getAccount(){
+    return activeAccountUid;
+  }
+};
 const termOf=x=>x.term||"Fall";
 const keyOf=c=>(termOf(c)==="Fall"?"":termOf(c)+"|")+c.w+"|"+c.q;
 const gk=c=>termOf(c)+"||"+c.g;
@@ -15,7 +60,31 @@ const fmt=s=>new Date(s+"T00:00").toLocaleDateString("en-US",{weekday:"short",mo
 const cfg=Object.assign({zh:true,ac:false,rev:false},store.get("wk2_cfg",{}));
 const srs=store.get("wk2_srs",{});
 const days=store.get("wk2_days",[]);
+
 const INTERVAL=[0,0,1,3,7,14];
+
+// Switch the active local progress to the selected Firebase account.
+window.activateAccountStorage=uid=>{
+  store.setAccount(uid);
+
+  const savedSrs=store.get("wk2_srs",{});
+  const savedDays=store.get("wk2_days",[]);
+
+  // Preserve the existing object and array references.
+  Object.keys(srs).forEach(k=>delete srs[k]);
+  Object.assign(srs,savedSrs);
+
+  days.splice(0,days.length,...savedDays);
+
+  console.log(
+    "Account storage activated:",
+    uid||"Guest",
+    "Cards:",
+    Object.keys(srs).length,
+    "Study days:",
+    days.length
+  );
+};
 const saveCfg=()=>store.set("wk2_cfg",cfg);
 const ping=()=>{if(window.queueSync)window.queueSync()};
 const saveSrs=()=>{store.set("wk2_srs",srs);ping()};

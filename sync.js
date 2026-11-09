@@ -389,15 +389,20 @@
       timer = setTimeout(sync, 1500);
     };
 
-    onAuthStateChanged(auth, async currentUser => {
+  onAuthStateChanged(auth, async currentUser => {
   user = currentUser;
+
+  // Switch storage before downloading or uploading progress.
+  if(typeof window.activateAccountStorage==="function"){
+    window.activateAccountStorage(user?.uid||null);
+  }
 
   // Firebase has finished checking the saved sign-in session.
   window.authInitialized = true;
 
   paint();
 
-  // Tell app.js to refresh the account page.
+  // Refresh the application after changing accounts.
   window.dispatchEvent(new Event("auth-state-changed"));
 
   if (user) {
