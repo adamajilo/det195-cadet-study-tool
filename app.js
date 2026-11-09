@@ -31,28 +31,51 @@ const box=c=>(srs[keyOf(c)]||{b:0}).b;
 const isDue=c=>{const s=srs[keyOf(c)];return !s||s.d<=today()};
 const mastered=c=>box(c)>=4;
 
+
 function rate(c, ok) {
   const k = keyOf(c);
-  const prev = srs[k] ? srs[k].b : 0;
+  const prior = srs[k] || {};
+  const prev = prior.b || 0;
   const b = ok ? Math.min(5, Math.max(2, prev + 1)) : 1;
-  srs[k] = { b, d: addDays(INTERVAL[b]), t: Date.now() };
-  
-  // Award Weekly XP stored locally
-  const currentWeek = (typeof getCurrentWeekId === "function") ? getCurrentWeekId() : today();
-  const xpStore = store.get("wk2_xp", { weekId: currentWeek, xp: 0 });
+
+  srs[k] = {
+    b,
+    d: addDays(INTERVAL[b]),
+    t: Date.now(),
+    xpDate: prior.xpDate || "",
+    masteryXpAwarded: !!prior.masteryXpAwarded
+  };
+
+  const currentWeek = window.getCurrentWeekId
+    ? window.getCurrentWeekId()
+    : today();
+
+  const xpStore = store.get("wk2_xp", {
+    weekId: currentWeek,
+    xp: 0
+  });
+
   if (xpStore.weekId !== currentWeek) {
     xpStore.weekId = currentWeek;
     xpStore.xp = 0;
   }
-  if (ok) {
-    xpStore.xp += 10; // +10 XP for getting a card right
-    if (b >= 4 && prev < 4) xpStore.xp += 50; // +50 XP bonus for mastery
+
+  if (ok && prior.xpDate !== today()) {
+    xpStore.xp += 10;
+    srs[k].xpDate = today();
+
+    if (b >= 4 && prev < 4 && !prior.masteryXpAwarded) {
+      xpStore.xp += 50;
+      srs[k].masteryXpAwarded = true;
+    }
   }
+
   store.set("wk2_xp", xpStore);
 
   saveSrs();
   touchDay();
 }
+
 
 function photos(c){
   const p=(IMG[c.g]||{})[c.q];
@@ -379,7 +402,18 @@ function accountView() {
   const allCards = (typeof C !== "undefined" && typeof visible === "function") ? C.filter(visible) : [];
   const masteredCount = (typeof mastered === "function") ? allCards.filter(mastered).length : 0;
   const currentStreak = (typeof streak === "function") ? streak() : 0;
-  const totalXp = (typeof srs !== "undefined") ? Object.keys(srs).length * 15 + (currentStreak * 25) : 0;
+  const currentWeek = window.getCurrentWeekId
+  ? window.getCurrentWeekId()
+  : today();
+
+const savedXp = store.get("wk2_xp", {
+  weekId: currentWeek,
+  xp: 0
+});
+
+const totalXp = savedXp.weekId === currentWeek
+  ? savedXp.xp
+  : 0;
 
   app.innerHTML = `
     <h2 class="h">Account & Cadet Profile</h2>
@@ -411,7 +445,7 @@ function accountView() {
           </div>
           <div class="stat" style="padding: 12px;">
             <b>${totalXp}</b>
-            <span>Total XP</span>
+            <span>Weekly XP</span>
           </div>
           <div class="stat" style="padding: 12px; grid-column: span 2;">
             <b>${masteredCount}</b>
@@ -438,55 +472,72 @@ function accountView() {
 }
 
 // Weekly Leaderboard View with Live Countdown & Clickable Profiles
+
 async function leaderboardView() {
   const app = $("#app");
-  
-  // Helper to calculate time remaining until next Sunday midnight
+
   const getTimeRemaining = () => {
     const now = new Date();
     const nextSunday = new Date(now);
-    const day = now.getDay(); // 0 is Sunday
-    const daysUntilSunday = (7 - day) % 7 || 7;
+    const daysUntilSunday = (7 - now.getDay()) || 7;
+
     nextSunday.setDate(now.getDate() + daysUntilSunday);
     nextSunday.setHours(0, 0, 0, 0);
-    
-    const diff = nextSunday - now;
-    if (diff <= 0) return "Resetting...";
-    
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-    
+
+    const diff = Math.max(0, nextSunday - now);
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
+
     return `${days}d ${hours}h ${minutes}m ${seconds}s`;
   };
 
-  app.innerHTML = `
+  const header = `
     <h2 class="h">Weekly Leaderboard</h2>
-    <p class="sub">Top cadets by weekly XP and cards mastered. Resets every Sunday.</p>
-    <div id="lb-timer" class="note" style="margin-bottom: 14px; font-weight: 600; color: var(--accent);">
+    <p class="sub">Top cadets ranked by weekly XP. Rankings reset every Sunday.</p>
+    <div id="lb-timer" class="note lb-timer">
       Reset in: ${getTimeRemaining()}
     </div>
-    <div id="lb-loading" class="note">Loading weekly ranks...</div>
   `;
 
-  // Start live countdown interval for this view
+  app.innerHTML = header + `
+    <div id="lb-loading" class="note">Loading weekly rankings...</div>
+  `;
+
   if (window.lbInterval) clearInterval(window.lbInterval);
+
   window.lbInterval = setInterval(() => {
-    const timerEl = document.getElementById("lb-timer");
-    if (timerEl) {
-      timerEl.textContent = `Reset in: ${getTimeRemaining()}`;
-    }
+    const el = document.getElementById("lb-timer");
+    if (el) el.textContent = `Reset in: ${getTimeRemaining()}`;
   }, 1000);
 
   if (typeof window.fetchWeeklyLeaderboard !== "function") {
-    $("#lb-loading").textContent = "Sign in with Firebase to participate in the leaderboard.";
+    $("#lb-loading").textContent =
+      "Leaderboard connection is not ready. Please refresh the page.";
     return;
   }
 
-  const data = await window.fetchWeeklyLeaderboard();
+  let data;
+
+  try {
+    data = await window.fetchWeeklyLeaderboard();
+  } catch (err) {
+    console.error("Leaderboard loading failed:", err);
+
+    const loading = $("#lb-loading");
+    if (loading) {
+      loading.textContent =
+        "Unable to load rankings. Please try again later.";
+    }
+    return;
+  }
+
+  if (location.hash !== "#leaderboard") return;
+
   if (!data.length) {
-    $("#lb-loading").textContent = "No leaderboard records found for this week yet. Complete a review to get on the board!";
+    $("#lb-loading").textContent =
+      "No leaderboard records this week yet. Sign in and complete a review to participate.";
     return;
   }
 
@@ -494,76 +545,107 @@ async function leaderboardView() {
     <tr>
       <td><b>#${index + 1}</b></td>
       <td>
-        <div class="lb-user" style="cursor: pointer;" onclick="window.viewCadetProfile('${item.id}')">
-          ${item.photo ? `<img src="${esc(item.photo)}" class="lb-avatar" alt="">` : ""}
-          <span style="text-decoration: underline; text-decoration-style: dotted;">${esc(item.name)}</span>
-        </div>
+        <button class="lb-profile-btn" data-profile="${esc(item.id)}">
+          ${item.photo
+            ? `<img src="${esc(item.photo)}" class="lb-avatar" alt="">`
+            : ""}
+          <span>${esc(item.name)}</span>
+        </button>
       </td>
       <td><b>${item.xpWeekly}</b> XP</td>
-      <td><b>${item.masteredWeekly}</b> cards</td>
+      <td><b>${item.mastered}</b> cards</td>
+      <td><b>${item.streak}</b> days</td>
     </tr>
   `).join("");
 
-  app.innerHTML = `
-    <h2 class="h">Weekly Leaderboard</h2>
-    <p class="sub">Top cadets by weekly XP and cards mastered. Resets every Sunday.</p>
-    <div id="lb-timer" class="note" style="margin-bottom: 14px; font-weight: 600; color: var(--accent);">
-      Reset in: ${getTimeRemaining()}
-    </div>
+  app.innerHTML = header + `
     <div class="tw">
-      <table>
+      <table id="lb-table">
         <thead>
           <tr>
             <th>RANK</th>
             <th>CADET</th>
             <th>WEEKLY XP</th>
-            <th>MASTERY</th>
+            <th>MASTERED</th>
+            <th>STREAK</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
   `;
+
+  document.querySelectorAll("[data-profile]").forEach(button => {
+    button.onclick = () =>
+      window.viewCadetProfile(button.dataset.profile);
+  });
 }
 
+
 // Inspect Other Cadets' Profiles
-window.viewCadetProfile = async (userId) => {
+
+window.viewCadetProfile = async userId => {
   if (typeof window.fetchUserProfile !== "function") return;
-  const profile = await window.fetchUserProfile(userId);
-  if (!profile) {
+
+  const app = $("#app");
+  app.innerHTML = '<p class="note">Loading cadet profile...</p>';
+
+  let profile;
+
+  try {
+    profile = await window.fetchUserProfile(userId);
+  } catch (err) {
+    console.error("Profile loading failed:", err);
     toast("Could not load cadet profile");
     return;
   }
 
-  const app = $("#app");
+  if (!profile) {
+    toast("Cadet profile not found");
+    return;
+  }
+
   app.innerHTML = `
     <h2 class="h">Cadet Profile</h2>
-    <p class="sub">Inspecting operational standing.</p>
-    <div class="qcard" style="max-width: 400px; margin: 0 auto; text-align: center;">
-      ${profile.photoURL ? `<img src="${esc(profile.photoURL)}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 12px; border: 2px solid var(--accent);" alt="">` : ""}
-      <h3 style="margin: 0 0 16px; font: 700 1.5rem var(--d);">${esc(profile.displayName || "Cadet")}</h3>
-      
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; margin-bottom: 20px;">
-        <div class="stat" style="padding: 10px;">
-          <b>${profile.streak || 0}</b>
+    <p class="sub">Public cadet profile and study standing.</p>
+
+    <div class="qcard cadet-profile">
+      ${profile.photoURL
+        ? `<img src="${esc(profile.photoURL)}" class="profile-photo" alt="">`
+        : ""}
+
+      <h3>${esc(profile.displayName || "Cadet")}</h3>
+
+      <div class="profile-stats">
+        <div class="stat">
+          <b>${Number(profile.streak) || 0}</b>
           <span>Day Streak</span>
         </div>
-        <div class="stat" style="padding: 10px;">
-          <b>${profile.mastered || 0}</b>
+
+        <div class="stat">
+          <b>${Number(profile.mastered) || 0}</b>
           <span>Total Mastered</span>
         </div>
-        <div class="stat" style="padding: 10px; grid-column: span 2;">
-          <b>${profile.weekly?.xp || 0} XP</b>
-          <span>This Week's Standing</span>
+
+        <div class="stat">
+          <b>${Number(profile.weekly?.xp) || 0}</b>
+          <span>Weekly XP</span>
         </div>
       </div>
 
       <div class="acts">
-        <button class="btn go" onclick="location.hash='#leaderboard'">Back to Leaderboard</button>
+        <button class="btn go" id="back-leaderboard">
+          Back to Leaderboard
+        </button>
       </div>
     </div>
   `;
+
+  $("#back-leaderboard").onclick = () => {
+    location.hash = "leaderboard";
+  };
 };
+
 
 const RANKS=[[45,"Cadet Colonel",[2,2,2,2]],[30,"Cadet Lieutenant Colonel",[2,2,2]],[21,"Cadet Major",[3,1.4,3]],[14,"Cadet Captain",[2.4,2.4]],[7,"Cadet First Lieutenant",[1.4,3]],[3,"Cadet Second Lieutenant",[3]]];
 const rankFor=n=>RANKS.find(r=>n>=r[0]);
@@ -627,6 +709,10 @@ function render(){
     el.title=rk?rk[1]+" streak rank"+(nextRank(rk)?". Next rank at "+nextRank(rk)[0]+" days.":"."):"";
   }
   if(r!=="test")clearInterval(tick);
+  if (r !== "leaderboard" && window.lbInterval) {
+  clearInterval(window.lbInterval);
+  window.lbInterval = null;
+}
   views[r]();
   termSw();
 }

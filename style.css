@@ -1124,3 +1124,92 @@ tr:last-child td {
         scroll-behavior: auto;
     }
 }
+
+
+/* Leaderboard and Public Cadet Profiles */
+
+.lb-timer {
+    margin-bottom: 14px;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.lb-profile-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    border: 0;
+    padding: 4px;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 8px;
+}
+
+.lb-profile-btn span {
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 4px;
+}
+
+.lb-profile-btn:hover {
+    color: var(--accent);
+}
+
+.lb-profile-btn .lb-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.cadet-profile {
+    max-width: 440px;
+    margin: 16px auto;
+}
+
+.cadet-profile h3 {
+    margin: 0 0 16px;
+    font: 700 1.5rem var(--d);
+}
+
+.profile-photo {
+    width: 84px;
+    height: 84px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--accent);
+}
+
+.profile-stats {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    text-align: center;
+    margin-bottom: 18px;
+}
+
+.profile-stats .stat:last-child {
+    grid-column: span 2;
+}
+
+@media (max-width: 480px) {
+    .lb-profile-btn {
+        gap: 6px;
+    }
+
+    .lb-profile-btn .lb-avatar {
+        width: 26px;
+        height: 26px;
+    }
+
+    #lb-table th,
+    #lb-table td {
+        padding: 10px 9px;
+        font-size: .85rem;
+    }
+}
