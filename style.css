@@ -164,6 +164,7 @@ button:disabled {
   object-fit: cover;
   vertical-align: middle;
   margin-right: 20px; /* Adds space between avatar and name */
+  padding-right: 8px; /* Additional padding for better spacing */
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
