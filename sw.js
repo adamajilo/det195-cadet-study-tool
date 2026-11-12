@@ -1,4 +1,4 @@
-const CACHE = "briefing-room-v2"; // bump on each deploy
+/*const CACHE = "briefing-room-v2"; // bump on each deploy
 
 self.addEventListener("install", e => {
   e.waitUntil(self.skipWaiting());
@@ -31,4 +31,4 @@ self.addEventListener("fetch", e => {
         caches.match(req).then(r => r || (req.mode === "navigate" ? caches.match("index.html") : Response.error()))
       )
   );
-});
+});*/
