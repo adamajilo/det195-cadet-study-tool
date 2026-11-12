@@ -19,11 +19,6 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <script>
-function showErr(t){var d=document.createElement("pre");d.style.cssText="position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#300;color:#fff;padding:8px;margin:0;font-size:12px;white-space:pre-wrap";d.textContent=t;document.body.appendChild(d)}
-addEventListener("error",function(e){showErr(e.message||("Failed to load "+(e.target.src||e.target.href)))+""},true);
-addEventListener("unhandledrejection",function(e){showErr("Promise: "+(e.reason&&e.reason.message||e.reason))});
-</script>
 <header class="top">
   <a class="brand" href="#home">
     <img
