@@ -1,4 +1,4 @@
-{
+/*{
   "name": "Briefing Room: Det 195 Warrior Knowledge",
   "short_name": "Briefing Room",
   "description": "Study trainer for AFROTC Detachment 195 Warrior Knowledge.",
@@ -13,4 +13,4 @@
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
-}
+}*/
