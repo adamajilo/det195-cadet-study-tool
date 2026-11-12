@@ -1,399 +1,991 @@
-const $ = (s, r = document) => r.querySelector(s);
-const esc = s => String(s).replace(/[&<>"]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
-const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[a[i], a[j]] = [a[j], a[i]] } return a };
-const store = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d } catch (e) { return d } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)) } catch (e) { } } };
-const termOf = x => x.term || "Fall";
-const keyOf = c => (termOf(c) === "Fall" ? "" : termOf(c) + "|") + c.w + "|" + c.q;
-const gk = c => termOf(c) + "||" + c.g;
-const ymd = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-const today = () => ymd(new Date());
-const addDays = n => { const d = new Date(); d.setDate(d.getDate() + n); return ymd(d) };
-const daysBetween = (a, b) => Math.round((new Date(b + "T00:00") - new Date(a + "T00:00")) / 864e5);
-const fmt = s => new Date(s + "T00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
-const cfg = Object.assign({ zh: true, ac: false, rev: false }, store.get("wk2_cfg", {}));
-const srs = store.get("wk2_srs", {});
-const days = store.get("wk2_days", []);
-const INTERVAL = [0, 0, 1, 3, 7, 14];
-const saveCfg = () => store.set("wk2_cfg", cfg);
-const ping = () => { if (window.queueSync) window.queueSync() };
-const saveSrs = () => { store.set("wk2_srs", srs); ping() };
-function touchDay() { const t = today(); if (!days.includes(t)) { days.push(t); store.set("wk2_days", days.slice(-90)); ping() } }
-function streak() { let n = 0; const d = new Date(); if (!days.includes(ymd(d))) d.setDate(d.getDate() - 1); while (days.includes(ymd(d))) { n++; d.setDate(d.getDate() - 1) } return n }
+const $=(s,r=document)=>r.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+// Account-specific storage for study progress.
+const ACCOUNT_STORAGE_KEYS=new Set([
+  "wk2_srs",
+  "wk2_days",
+  "wk2_tests",
+  "wk2_xp",
+  "wk2_total_xp",
+  "wk_known"
+]);
 
-const baseVis = c => (cfg.zh || c.kind !== "zh") && (cfg.jobs || c.kind !== "job") && (cfg.ac || (c.kind !== "ac" && c.g !== "Aircraft"));
-const visible = c => baseVis(c) && (cfg.term === "All" || termOf(c) === cfg.term || c.kind === "job");
-const weeksIn = tm => [...new Set(C.filter(c => termOf(c) === tm && c.kind !== "job").map(c => c.w))].sort((a, b) => a - b);
-const weeksFor = t => t.scope || (t.w === 5 ? [1, 2, 3, 4] : t.w === 9 ? weeksIn(termOf(t)) : [t.w]);
-const nextTest = () => SCHED.find(t => t.d >= today() && t.w !== 0) || SCHED[SCHED.length - 1];
-const scopeCards = (ws, tm) => C.filter(c => baseVis(c) && termOf(c) === tm && ws.includes(c.w));
-const box = c => (srs[keyOf(c)] || { b: 0 }).b;
-const isDue = c => { const s = srs[keyOf(c)]; return !s || s.d <= today() };
-const mastered = c => box(c) >= 4;
+let activeAccountUid=null;
 
-function rate(c, ok) {
-  const k = keyOf(c); const prev = srs[k] ? srs[k].b : 0;
-  const b = ok ? Math.min(5, Math.max(2, prev + 1)) : 1;
-  srs[k] = { b, d: addDays(INTERVAL[b]), t: Date.now() }; saveSrs(); touchDay();
+const storageKey=k=>
+  ACCOUNT_STORAGE_KEYS.has(k)&&activeAccountUid
+    ?`wk2_account_${activeAccountUid}_${k}`
+    :k;
+
+const store={
+  get(k,d){
+    try{
+      const v=localStorage.getItem(storageKey(k));
+      return v?JSON.parse(v):d;
+    }catch(e){
+      return d;
+    }
+  },
+  set(k,v){
+    try{
+      localStorage.setItem(storageKey(k),JSON.stringify(v));
+    }catch(e){}
+  },
+  setAccount(uid){
+    activeAccountUid=uid||null;
+  },
+  getAccount(){
+    return activeAccountUid;
+  }
+};
+const termOf=x=>x.term||"Fall";
+const keyOf=c=>(termOf(c)==="Fall"?"":termOf(c)+"|")+c.w+"|"+c.q;
+const gk=c=>termOf(c)+"||"+c.g;
+const ymd=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const today=()=>ymd(new Date());
+const addDays=n=>{const d=new Date();d.setDate(d.getDate()+n);return ymd(d)};
+const daysBetween=(a,b)=>Math.round((new Date(b+"T00:00")-new Date(a+"T00:00"))/864e5);
+const fmt=s=>new Date(s+"T00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
+
+const cfg=Object.assign({zh:true,ac:false,rev:false},store.get("wk2_cfg",{}));
+const srs=store.get("wk2_srs",{});
+const days=store.get("wk2_days",[]);
+window.activateAccountStorage=uid=>{
+  const nextUid=uid||null;
+
+  if(store.getAccount()===nextUid)return;
+
+  store.setAccount(nextUid);
+
+  const savedSrs=store.get("wk2_srs",{});
+  Object.keys(srs).forEach(k=>delete srs[k]);
+  Object.assign(srs,savedSrs);
+
+  const savedDays=store.get("wk2_days",[]);
+  days.splice(0,days.length,...savedDays);
+};
+const INTERVAL=[0,0,1,3,7,14];
+
+// Switch the active local progress to the selected Firebase account.
+window.activateAccountStorage=uid=>{
+  store.setAccount(uid);
+
+  const savedSrs=store.get("wk2_srs",{});
+  const savedDays=store.get("wk2_days",[]);
+
+  // Preserve the existing object and array references.
+  Object.keys(srs).forEach(k=>delete srs[k]);
+  Object.assign(srs,savedSrs);
+
+  days.splice(0,days.length,...savedDays);
+
+  console.log(
+    "Account storage activated:",
+    uid||"Guest",
+    "Cards:",
+    Object.keys(srs).length,
+    "Study days:",
+    days.length
+  );
+};
+const saveCfg=()=>store.set("wk2_cfg",cfg);
+const ping=()=>{if(window.queueSync)window.queueSync()};
+const saveSrs=()=>{store.set("wk2_srs",srs);ping()};
+function touchDay(){const t=today();if(!days.includes(t)){days.push(t);store.set("wk2_days",days.slice(-90));ping()}}
+function streak(){let n=0;const d=new Date();if(!days.includes(ymd(d)))d.setDate(d.getDate()-1);while(days.includes(ymd(d))){n++;d.setDate(d.getDate()-1)}return n}
+
+// Lifetime XP initialization.
+// Existing weekly XP becomes the starting lifetime XP baseline.
+const initialWeeklyXp=store.get("wk2_xp",{weekId:"",xp:0});
+let initialTotalXp=store.get("wk2_total_xp",null);
+
+if(initialTotalXp===null||!Number.isFinite(Number(initialTotalXp))){
+  initialTotalXp=Math.max(0,Number(initialWeeklyXp.xp)||0);
+  store.set("wk2_total_xp",initialTotalXp);
+}else{
+  initialTotalXp=Math.max(0,Number(initialTotalXp)||0);
+  store.set("wk2_total_xp",initialTotalXp);
 }
 
-function photos(c) {
-  const p = (IMG[c.g] || {})[c.q];
-  if (!p) return [];
-  if (typeof p === "string") return [[p, ""]];
-  if (Array.isArray(p)) return p.map(i => typeof i === "string" ? [i, ""] : [i[0], i[1] || ""]).filter(i => i[0]);
-  return [p.uurp && [p.uurp, "Utility Uniform"], p.erb && [p.erb, "Epaulet"]].filter(Boolean);
+// Expose lifetime XP for sync.js.
+window.getTotalXp=()=>Math.max(0,Number(store.get("wk2_total_xp",0))||0);
+
+const baseVis=c=>(cfg.zh||c.kind!=="zh")&&(cfg.jobs||c.kind!=="job")&&(cfg.ac||(c.kind!=="ac"&&c.g!=="Aircraft"));
+const visible=c=>baseVis(c)&&(cfg.term==="All"||termOf(c)===cfg.term||c.kind==="job");
+const weeksIn=tm=>[...new Set(C.filter(c=>termOf(c)===tm&&c.kind!=="job").map(c=>c.w))].sort((a,b)=>a-b);
+const weeksFor=t=>t.scope||(t.w===5?[1,2,3,4]:t.w===9?weeksIn(termOf(t)):[t.w]);
+const nextTest=()=>SCHED.find(t=>t.d>=today()&&t.w!==0)||SCHED[SCHED.length-1];
+const scopeCards=(ws,tm)=>C.filter(c=>baseVis(c)&&termOf(c)===tm&&ws.includes(c.w));
+const box=c=>(srs[keyOf(c)]||{b:0}).b;
+const isDue=c=>{const s=srs[keyOf(c)];return !s||s.d<=today()};
+const mastered=c=>box(c)>=4;
+
+function rate(c,ok){
+  const k=keyOf(c);
+  const prior=srs[k]||{};
+  const prev=prior.b||0;
+  const b=ok?Math.min(5,Math.max(2,prev+1)):1;
+
+  srs[k]={
+    b,
+    d:addDays(INTERVAL[b]),
+    t:Date.now(),
+    xpDate:prior.xpDate||"",
+    masteryXpAwarded:!!prior.masteryXpAwarded
+  };
+
+  const currentWeek=window.getCurrentWeekId
+    ?window.getCurrentWeekId()
+    :today();
+
+  const xpStore=store.get("wk2_xp",{
+    weekId:currentWeek,
+    xp:0
+  });
+
+  if(xpStore.weekId!==currentWeek){
+    xpStore.weekId=currentWeek;
+    xpStore.xp=0;
+  }
+
+  // Track the exact XP earned during this review.
+  let earnedXp=0;
+
+  if(ok&&prior.xpDate!==today()){
+    earnedXp+=10;
+    srs[k].xpDate=today();
+
+    if(b>=4&&prev<4&&!prior.masteryXpAwarded){
+      earnedXp+=50;
+      srs[k].masteryXpAwarded=true;
+    }
+  }
+
+  // Weekly XP resets each week.
+  xpStore.xp=(Number(xpStore.xp)||0)+earnedXp;
+  store.set("wk2_xp",xpStore);
+
+  // Lifetime XP never resets.
+  if(earnedXp>0){
+    const lifetimeXp=Math.max(
+      0,
+      Number(store.get("wk2_total_xp",0))||0
+    );
+
+    store.set("wk2_total_xp",lifetimeXp+earnedXp);
+  }
+
+  saveSrs();
+  touchDay();
 }
-function shots(c, quiet) {
-  const l = photos(c); if (!l.length) return "";
-  const name = c.a.split("\n")[0];
-  return `<div class="shots">${l.map(([src, cap]) => `<figure class="shot"><img class="pic" src="${esc(src)}" alt="${quiet ? "" : esc(cap || name)}" loading="lazy">${cap && !quiet ? `<figcaption>${esc(cap)}</figcaption>` : ""}</figure>`).join("")}</div>`;
+
+function photos(c){
+  const p=(IMG[c.g]||{})[c.q];
+  if(!p)return[];
+  if(typeof p==="string")return[[p,""]];
+  if(Array.isArray(p))return p.map(i=>typeof i==="string"?[i,""]:[i[0],i[1]||""]).filter(i=>i[0]);
+  return[p.uurp&&[p.uurp,"Utility Uniform"],p.erb&&[p.erb,"Epaulet"]].filter(Boolean);
 }
-(function () {
-  const k = store.get("wk_known", []);
-  if (k.length && !Object.keys(srs).length) { k.forEach(x => { srs[x] = { b: 3, d: addDays(3) } }); saveSrs() }
+function shots(c,quiet){
+  const l=photos(c);if(!l.length)return"";
+  const name=c.a.split("\n")[0];
+  return`<div class="shots">${l.map(([src,cap])=>`<figure class="shot"><img class="pic" src="${esc(src)}" alt="${quiet?"":esc(cap||name)}" loading="lazy">${cap&&!quiet?`<figcaption>${esc(cap)}</figcaption>`:""}</figure>`).join("")}</div>`;
+}
+(function(){
+  const k=store.get("wk_known",[]);
+  if(k.length&&!Object.keys(srs).length){k.forEach(x=>{srs[x]={b:3,d:addDays(3)}});saveSrs()}
 })();
 
-let D = null, RC = null, T = null, tick = null;
-function startDrill(cards, smart) {
-  const tier = c => box(c) > 0 && isDue(c) ? 0 : !box(c) ? 1 : 2;
-  const part = n => shuffle(cards.filter(c => tier(c) === n)).sort((x, y) => box(x) - box(y));
-  const q = smart ? [...part(0), ...part(1).slice(0, 20)] : [...part(0), ...part(1), ...part(2)];
-  RC = null; D = { q: q.slice(0, 60), src: cards, i: 0, on: false, hit: 0, miss: 0 };
-  if (location.hash !== "#drill") location.hash = "drill"; else render();
+let D=null,RC=null,T=null,tick=null;
+function startDrill(cards,smart){
+  const tier=c=>box(c)>0&&isDue(c)?0:!box(c)?1:2;
+  const part=n=>shuffle(cards.filter(c=>tier(c)===n)).sort((x,y)=>box(x)-box(y));
+  const q=smart?[...part(0),...part(1).slice(0,20)]:[...part(0),...part(1),...part(2)];
+  RC=null;D={q:q.slice(0,60),src:cards,i:0,on:false,hit:0,miss:0};
+  if(location.hash!=="#drill")location.hash="drill";else render();
 }
 
-function home() {
-  const t = nextTest(), sc = scopeCards(weeksFor(t), termOf(t)), all = C.filter(visible);
-  const left = Math.max(0, daysBetween(today(), t.d));
-  const due = sc.filter(c => box(c) > 0 && isDue(c)).length;
-  const tiles = [...new Set(all.map(gk))].map(g => {
-    const cs = all.filter(c => gk(c) === g);
-    const bx = [0, 1, 2, 3, 4, 5].map(n => cs.filter(c => box(c) === n).length);
-    const done = cs.length > 0 && bx[4] + bx[5] === cs.length;
-    return `<button class="tile${done ? " cleared" : ""}" data-g="${esc(g)}">${done ? '<em class="stamp">Cleared</em>' : ""}<b>${esc(cs[0].g)}</b><span>${cfg.term === "All" && terms().length > 1 && cs[0].kind !== "job" ? termLabel(termOf(cs[0])) + ", " : ""}${cs[0].w ? "Week " + cs[0].w + ", " : "Reference, "}${cs.length} cards, ${bx[4] + bx[5]} mastered</span><i class="seg">${bx.map((n, i) => `<u class="b${i}" style="flex:${n}"></u>`).join("")}</i></button>`;
+function home(){
+  const t=nextTest(),sc=scopeCards(weeksFor(t),termOf(t)),all=C.filter(visible);
+  const left=Math.max(0,daysBetween(today(),t.d));
+  const due=sc.filter(c=>box(c)>0&&isDue(c)).length;
+  const tiles=[...new Set(all.map(gk))].map(g=>{
+    const cs=all.filter(c=>gk(c)===g);
+    const bx=[0,1,2,3,4,5].map(n=>cs.filter(c=>box(c)===n).length);
+    const done=cs.length>0&&bx[4]+bx[5]===cs.length;
+    return`<button class="tile${done?" cleared":""}" data-g="${esc(g)}">${done?'<em class="stamp">Cleared</em>':""}<b>${esc(cs[0].g)}</b><span>${cfg.term==="All"&&terms().length>1&&cs[0].kind!=="job"?termLabel(termOf(cs[0]))+", ":""}${cs[0].w?"Week "+cs[0].w+", ":"Reference, "}${cs.length} cards, ${bx[4]+bx[5]} mastered</span><i class="seg">${bx.map((n,i)=>`<u class="b${i}" style="flex:${n}"></u>`).join("")}</i></button>`;
   }).join("");
-  $("#app").innerHTML = `
-  <section class="hero"><div><p class="kick">UP NEXT</p><h2>${esc(t.t)}</h2><p>${left === 0 ? "Today" : left + (left === 1 ? " day" : " days")} away, ${fmt(t.d)}. ${esc(t.f)}</p></div><button class="btn go" id="goTest">Study this test</button></section>
+  $("#app").innerHTML=`
+  <section class="hero"><div><p class="kick">UP NEXT</p><h2>${esc(t.t)}</h2><p>${left===0?"Today":left+(left===1?" day":" days")} away, ${fmt(t.d)}. ${esc(t.f)}</p></div><button class="btn go" id="goTest">Study this test</button></section>
   <div class="stats"><div class="stat"><b>${all.filter(mastered).length}<small>/${all.length}</small></b><span>Mastered</span></div><div class="stat"><b>${streak()}</b><span>Day streak</span></div><div class="stat"><b>${due}</b><span>Due for review</span></div></div>
   <h2 class="h">Topics</h2><p class="sub">Tap a topic to drill it. The bar shows how far each card has climbed, from new on the left to mastered on the right.</p>
   <div class="tiles">${tiles}</div>`;
-  $("#goTest").onclick = () => startDrill(sc);
-  document.querySelectorAll(".tile").forEach(b => b.onclick = () => startDrill(all.filter(c => gk(c) === b.dataset.g)));
+  $("#goTest").onclick=()=>startDrill(sc);
+  document.querySelectorAll(".tile").forEach(b=>b.onclick=()=>startDrill(all.filter(c=>gk(c)===b.dataset.g)));
 }
 
-function drill() {
-  const app = $("#app");
-  if (RC) {
-    const q = RC.qs[RC.i];
-    if (!q) {
-      app.innerHTML = `<div class="done"><b>${RC.hit}/${RC.qs.length}</b><p>Photo drill complete.</p><div class="acts"><button class="btn go" id="again">Back to drill</button></div></div>`;
-      $("#again").onclick = () => { RC = null; render() }; return;
+function drill(){
+  const app=$("#app");
+  if(RC){
+    const q=RC.qs[RC.i];
+    if(!q){
+      app.innerHTML=`<div class="done"><b>${RC.hit}/${RC.qs.length}</b><p>Photo drill complete.</p><div class="acts"><button class="btn go" id="again">Back to drill</button></div></div>`;
+      $("#again").onclick=()=>{RC=null;render()};return;
     }
-    app.innerHTML = `<div class="prog"><i style="width:${RC.i / RC.qs.length * 100}%"></i></div><div class="qcard">${qPrompt(q)}</div><div class="opts">${q.opts.map((o, j) => `<button class="ans" data-j="${j}">${esc(o)}</button>`).join("")}</div><div class="acts" style="margin-top:14px"><button class="btn go" id="nx" hidden>Next</button></div>`;
-    document.querySelectorAll(".ans").forEach(b => b.onclick = () => {
-      if (RC.pick != null) return;
-      const j = +b.dataset.j; RC.pick = j; const ok = q.opts[j] === q.right; rate(q.c, ok); if (ok) RC.hit++;
-      document.querySelectorAll(".ans").forEach((x, k) => { if (q.opts[k] === q.right) x.classList.add("right"); else if (k === j) x.classList.add("wrong") });
-      $("#nx").hidden = false; $("#nx").focus();
+    app.innerHTML=`<div class="prog"><i style="width:${RC.i/RC.qs.length*100}%"></i></div><div class="qcard">${qPrompt(q)}</div><div class="opts">${q.opts.map((o,j)=>`<button class="ans" data-j="${j}">${esc(o)}</button>`).join("")}</div><div class="acts" style="margin-top:14px"><button class="btn go" id="nx" hidden>Next</button></div>`;
+    document.querySelectorAll(".ans").forEach(b=>b.onclick=()=>{
+      if(RC.pick!=null)return;
+      const j=+b.dataset.j;RC.pick=j;const ok=q.opts[j]===q.right;rate(q.c,ok);if(ok)RC.hit++;
+      document.querySelectorAll(".ans").forEach((x,k)=>{if(q.opts[k]===q.right)x.classList.add("right");else if(k===j)x.classList.add("wrong")});
+      $("#nx").hidden=false;$("#nx").focus();
     });
-    $("#nx").onclick = () => { RC.i++; RC.pick = null; render() };
+    $("#nx").onclick=()=>{RC.i++;RC.pick=null;render()};
     return;
   }
-  if (D) {
-    const c = D.q[D.i];
-    if (!c) {
-      const m = C.filter(visible).filter(mastered).length;
-      app.innerHTML = `<div class="done"><b>${D.hit}/${D.hit + D.miss}</b><p>${D.q.length ? "Session complete. You have " + m + " cards mastered overall." : "Nothing to review right now. Come back tomorrow or pick a topic from Home."}</p><div class="acts"><button class="btn go" id="again">Back to drill</button>${D.src && D.src.length ? '<button class="btn" id="prac">Practice these anyway</button><button class="btn" id="rst">Reset these cards</button>' : ""}<button class="btn" id="toHome">Home</button></div></div>`;
-      $("#again").onclick = () => { D = null; render() }; $("#toHome").onclick = () => { D = null; location.hash = "home" }; if ($("#prac")) $("#prac").onclick = () => startDrill(D.src); if ($("#rst")) $("#rst").onclick = () => { if (confirm("Reset progress for these " + D.src.length + " cards?")) { const src = D.src; src.forEach(c => { srs[keyOf(c)] = { b: 0, d: today(), t: Date.now() } }); saveSrs(); startDrill(src) } }; return;
+  if(D){
+    const c=D.q[D.i];
+    if(!c){
+      const m=C.filter(visible).filter(mastered).length;
+      app.innerHTML=`<div class="done"><b>${D.hit}/${D.hit+D.miss}</b><p>${D.q.length?"Session complete. You have "+m+" cards mastered overall.":"Nothing to review right now. Come back tomorrow or pick a topic from Home."}</p><div class="acts"><button class="btn go" id="again">Back to drill</button>${D.src&&D.src.length?'<button class="btn" id="prac">Practice these anyway</button><button class="btn" id="rst">Reset these cards</button>':""}<button class="btn" id="toHome">Home</button></div></div>`;
+      $("#again").onclick=()=>{D=null;render()};$("#toHome").onclick=()=>{D=null;location.hash="home"};if($("#prac"))$("#prac").onclick=()=>startDrill(D.src);if($("#rst"))$("#rst").onclick=()=>{if(confirm("Reset progress for these "+D.src.length+" cards?")){const src=D.src;src.forEach(c=>{srs[keyOf(c)]={b:0,d:today(),t:Date.now()}});saveSrs();startDrill(src)}};return;
     }
-    const P = `<p class="ft">${esc(c.q)}</p>`;
-    const A = `${shots(c)}<p class="ft${c.kind === "zh" ? " zh" : ""}">${esc(c.a)}</p>`;
-    const [f, b] = cfg.rev ? [A, P] : [P, A];
-    app.innerHTML = `<div class="prog"><i style="width:${D.i / D.q.length * 100}%"></i></div>
-    <div class="flip ${D.on ? "on" : ""}" id="flip"><div class="face front"><div class="tag"><span>${c.w ? "Week " + c.w + ", " : ""}${esc(c.g)}</span><span>${box(c) ? "Box " + box(c) : "New"}</span></div>${f}</div><div class="face back"><div class="tag"><span>${c.w ? "Week " + c.w + ", " : ""}${esc(c.g)}</span><span>${box(c) ? "Box " + box(c) : "New"}</span></div>${b}</div></div>
-    <div class="acts">${D.on ? '<button class="btn miss" id="miss">Missed it</button><button class="btn hit" id="hit">Got it</button>' : '<button class="btn go" id="show">Show answer</button>'}</div>
+    const P=`<p class="ft">${esc(c.q)}</p>`;
+    const A=`${shots(c)}<p class="ft${c.kind==="zh"?" zh":""}">${esc(c.a)}</p>`;
+    const [f,b]=cfg.rev?[A,P]:[P,A];
+    app.innerHTML=`<div class="prog"><i style="width:${D.i/D.q.length*100}%"></i></div>
+    <div class="flip ${D.on?"on":""}" id="flip"><div class="face front"><div class="tag"><span>${c.w?"Week "+c.w+", ":""}${esc(c.g)}</span><span>${box(c)?"Box "+box(c):"New"}</span></div>${f}</div><div class="face back"><div class="tag"><span>${c.w?"Week "+c.w+", ":""}${esc(c.g)}</span><span>${box(c)?"Box "+box(c):"New"}</span></div>${b}</div></div>
+    <div class="acts">${D.on?'<button class="btn miss" id="miss">Missed it</button><button class="btn hit" id="hit">Got it</button>':'<button class="btn go" id="show">Show answer</button>'}</div>
     <div class="row"><button class="tg" id="quit">End session</button></div>`;
-    const next = () => { D.i++; D.on = false; render() };
-    $("#flip").onclick = () => { D.on = !D.on; render() };
-    if (D.on) { $("#miss").onclick = () => { rate(c, false); D.miss++; D.q.splice(Math.min(D.q.length, D.i + 4), 0, c); next() }; $("#hit").onclick = () => { rate(c, true); D.hit++; next() } }
-    else $("#show").onclick = () => { D.on = true; render() };
-    $("#quit").onclick = () => { D = null; render() };
+    const next=()=>{D.i++;D.on=false;render()};
+    $("#flip").onclick=()=>{D.on=!D.on;render()};
+    if(D.on){$("#miss").onclick=()=>{rate(c,false);D.miss++;D.q.splice(Math.min(D.q.length,D.i+4),0,c);next()};$("#hit").onclick=()=>{rate(c,true);D.hit++;next()}}
+    else $("#show").onclick=()=>{D.on=true;render()};
+    $("#quit").onclick=()=>{D=null;render()};
     return;
   }
-  const t = nextTest(), sc = scopeCards(weeksFor(t), termOf(t)), all = C.filter(visible);
-  const n = a => a.filter(c => box(c) > 0 && isDue(c)).length;
-  app.innerHTML = `<h2 class="h">Drill</h2><p class="sub">Cards you miss come back sooner. Cards you get right come back after a longer gap.</p>
+  const t=nextTest(),sc=scopeCards(weeksFor(t),termOf(t)),all=C.filter(visible);
+  const n=a=>a.filter(c=>box(c)>0&&isDue(c)).length;
+  app.innerHTML=`<h2 class="h">Drill</h2><p class="sub">Cards you miss come back sooner. Cards you get right come back after a longer gap.</p>
   <div class="opts">
     <button class="opt" data-s="test"><b>${esc(t.t)} set</b><span>${sc.length} cards, ${n(sc)} due</span></button>
     <button class="opt" data-s="due"><b>Due for review</b><span>${n(all)} cards across every topic</span></button>
-    <button class="opt" data-s="weak"><b>Weak spots</b><span>${all.filter(c => box(c) === 1).length} cards you keep missing</span></button>
+    <button class="opt" data-s="weak"><b>Weak spots</b><span>${all.filter(c=>box(c)===1).length} cards you keep missing</span></button>
     <button class="opt" data-s="all"><b>Everything</b><span>${all.length} cards, new ones mixed in</span></button>
-    <button class="opt" data-s="rec"><b>Photo recognition</b><span>${all.filter(c => photos(c).length).length} cards with photos</span></button>
+    <button class="opt" data-s="rec"><b>Photo recognition</b><span>${all.filter(c=>photos(c).length).length} cards with photos</span></button>
   </div>
   <div class="row"><button class="tg" id="rev" aria-pressed="${cfg.rev}">Answer first</button><button class="tg" id="zh" aria-pressed="${cfg.zh}">Chinese phrases</button><button class="tg" id="ac" aria-pressed="${cfg.ac}">Aircraft (FTP only)</button><button class="tg" id="jobs" aria-pressed="${cfg.jobs}">Career codes</button><button class="tg" id="rall">Reset all progress</button></div>`;
-  document.querySelectorAll(".opt").forEach(b => b.onclick = () => { const s = b.dataset.s; if (s === "rec") { const ph = all.filter(c => photos(c).length); if (!ph.length) return; D = null; RC = { qs: shuffle(ph).slice(0, 20).map(c => buildQ(c, all, true)), i: 0, hit: 0, pick: null }; render(); return } startDrill(s === "test" ? sc : s === "due" ? all.filter(c => box(c) > 0) : s === "weak" ? all.filter(c => box(c) === 1) : all, s === "due") });
-  ["rev", "zh", "ac", "jobs"].forEach(k => $("#" + k).onclick = () => { cfg[k] = !cfg[k]; saveCfg(); render() });
-  $("#rall").onclick = () => { if (confirm("Reset all card progress?")) { Object.keys(srs).forEach(k => { srs[k] = { b: 0, d: today(), t: Date.now() } }); saveSrs(); render() } };
+  document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{const s=b.dataset.s;if(s==="rec"){const ph=all.filter(c=>photos(c).length);if(!ph.length)return;D=null;RC={qs:shuffle(ph).slice(0,20).map(c=>buildQ(c,all,true)),i:0,hit:0,pick:null};render();return}startDrill(s==="test"?sc:s==="due"?all.filter(c=>box(c)>0):s==="weak"?all.filter(c=>box(c)===1):all,s==="due")});
+  ["rev","zh","ac","jobs"].forEach(k=>$("#"+k).onclick=()=>{cfg[k]=!cfg[k];saveCfg();render()});
+  $("#rall").onclick=()=>{if(confirm("Reset all card progress?")){Object.keys(srs).forEach(k=>{srs[k]={b:0,d:today(),t:Date.now()}});saveSrs();render()}};
 }
 
-let RS = null;
-function recite() {
-  const app = $("#app");
-  if (!RS) {
-    app.innerHTML = `<h2 class="h">Recite</h2><p class="sub">Say each line out loud first, then reveal it to check yourself.</p><div class="list">${R.map((r, i) => [r, i]).filter(([r]) => cfg.term === "All" || termOf(r) === cfg.term).map(([r, i]) => `<button class="ritem" data-i="${i}">${esc(r.t)}<span>Week ${r.w}${r.l.length ? ", " + r.l.filter(x => x[0] !== "#").length + " lines" : ", check against the guide"}</span></button>`).join("")}</div>`;
-    document.querySelectorAll(".ritem").forEach(b => b.onclick = () => { RS = { r: R[+b.dataset.i], n: 0, hint: false }; render() }); return;
+let RS=null;
+function recite(){
+  const app=$("#app");
+  if(!RS){
+    app.innerHTML=`<h2 class="h">Recite</h2><p class="sub">Say each line out loud first, then reveal it to check yourself.</p><div class="list">${R.map((r,i)=>[r,i]).filter(([r])=>cfg.term==="All"||termOf(r)===cfg.term).map(([r,i])=>`<button class="ritem" data-i="${i}">${esc(r.t)}<span>Week ${r.w}${r.l.length?", "+r.l.filter(x=>x[0]!=="#").length+" lines":", check against the guide"}</span></button>`).join("")}</div>`;
+    document.querySelectorAll(".ritem").forEach(b=>b.onclick=()=>{RS={r:R[+b.dataset.i],n:0,hint:false};render()});return;
   }
-  const r = RS.r;
-  if (!r.l.length) {
-    app.innerHTML = `<h2 class="h">${esc(r.t)}</h2><p class="note">Say or write it from memory, then open the study guide to Week ${r.w} and compare line by line. Add the lyrics to songs.js to practice it here.</p><button class="btn" id="back">Back to list</button>`;
-    $("#back").onclick = () => { RS = null; render() }; return;
+  const r=RS.r;
+  if(!r.l.length){
+    app.innerHTML=`<h2 class="h">${esc(r.t)}</h2><p class="note">Say or write it from memory, then open the study guide to Week ${r.w} and compare line by line. Add the lyrics to songs.js to practice it here.</p><button class="btn" id="back">Back to list</button>`;
+    $("#back").onclick=()=>{RS=null;render()};return;
   }
-  const total = r.l.filter(x => x[0] !== "#").length; let seen = 0;
-  const hintOf = x => x.split(" ").map(w => w.replace(/[A-Za-z0-9']+/, m => m[0] + "_".repeat(Math.max(0, m.length - 1)))).join(" ");
-  const rows = r.l.map(x => {
-    if (x[0] === "#") return `<p class="ln head">${esc(x.slice(1).trim())}</p>`;
-    const k = seen++;
-    if (k < RS.n) return `<p class="ln">${esc(x)}</p>`;
-    return RS.hint ? `<p class="ln hint" data-k="${k}">${esc(hintOf(x))}</p>` : `<p class="ln hide" data-k="${k}">${esc(x)}</p>`;
+  const total=r.l.filter(x=>x[0]!=="#").length;let seen=0;
+  const hintOf=x=>x.split(" ").map(w=>w.replace(/[A-Za-z0-9']+/,m=>m[0]+"_".repeat(Math.max(0,m.length-1)))).join(" ");
+  const rows=r.l.map(x=>{
+    if(x[0]==="#")return`<p class="ln head">${esc(x.slice(1).trim())}</p>`;
+    const k=seen++;
+    if(k<RS.n)return`<p class="ln">${esc(x)}</p>`;
+    return RS.hint?`<p class="ln hint" data-k="${k}">${esc(hintOf(x))}</p>`:`<p class="ln hide" data-k="${k}">${esc(x)}</p>`;
   }).join("");
-  app.innerHTML = `<h2 class="h">${esc(r.t)}</h2><p class="sub">${RS.n} of ${total} lines shown</p><div class="lines">${rows}</div>
-  <div class="acts"><button class="btn go" id="nx">Show next line</button><button class="btn" id="ht">${RS.hint ? "Hide hints" : "Letter hints"}</button><button class="btn" id="all">Show all</button><button class="btn" id="rs">Start over</button><button class="btn" id="back">Back</button></div>`;
-  $("#nx").onclick = () => { RS.n = Math.min(total, RS.n + 1); render() };
-  $("#ht").onclick = () => { RS.hint = !RS.hint; render() };
-  $("#all").onclick = () => { RS.n = total; render() };
-  $("#rs").onclick = () => { RS.n = 0; render() };
-  document.querySelectorAll(".ln[data-k]").forEach(el => el.onclick = () => { RS.n = Math.max(RS.n, +el.dataset.k + 1); render() });
-  $("#back").onclick = () => { RS = null; render() };
+  app.innerHTML=`<h2 class="h">${esc(r.t)}</h2><p class="sub">${RS.n} of ${total} lines shown</p><div class="lines">${rows}</div>
+  <div class="acts"><button class="btn go" id="nx">Show next line</button><button class="btn" id="ht">${RS.hint?"Hide hints":"Letter hints"}</button><button class="btn" id="all">Show all</button><button class="btn" id="rs">Start over</button><button class="btn" id="back">Back</button></div>`;
+  $("#nx").onclick=()=>{RS.n=Math.min(total,RS.n+1);render()};
+  $("#ht").onclick=()=>{RS.hint=!RS.hint;render()};
+  $("#all").onclick=()=>{RS.n=total;render()};
+  $("#rs").onclick=()=>{RS.n=0;render()};
+  document.querySelectorAll(".ln[data-k]").forEach(el=>el.onclick=()=>{RS.n=Math.max(RS.n,+el.dataset.k+1);render()});
+  $("#back").onclick=()=>{RS=null;render()};
 }
 
-function plan() {
-  const t = nextTest(), sc = scopeCards(weeksFor(t), termOf(t));
-  const left = Math.max(1, daysBetween(today(), t.d));
-  const todo = sc.filter(c => !mastered(c)).length;
-  const rows = SCHED.map(x => { const dl = daysBetween(today(), x.d); return `<tr class="${x === t ? "now" : ""}"><td>${esc(x.t)}</td><td>${fmt(x.d)}</td><td>${esc(x.f)}</td><td>${dl < 0 ? "Done" : dl === 0 ? "Today" : dl + " days"}</td></tr>` }).join("");
-  $("#app").innerHTML = `<h2 class="h">Plan</h2>
-  <p class="note">${todo ? `${todo} cards in ${esc(t.t)} are not mastered yet. That is about ${Math.ceil(todo / left)} a day to be ready by ${fmt(t.d)}.` : `Every card in ${esc(t.t)} is mastered. Keep reviewing to hold it.`}</p>
+function plan(){
+  const t=nextTest(),sc=scopeCards(weeksFor(t),termOf(t));
+  const left=Math.max(1,daysBetween(today(),t.d));
+  const todo=sc.filter(c=>!mastered(c)).length;
+  const rows=SCHED.map(x=>{const dl=daysBetween(today(),x.d);return`<tr class="${x===t?"now":""}"><td>${esc(x.t)}</td><td>${fmt(x.d)}</td><td>${esc(x.f)}</td><td>${dl<0?"Done":dl===0?"Today":dl+" days"}</td></tr>`}).join("");
+  $("#app").innerHTML=`<h2 class="h">Plan</h2>
+  <p class="note">${todo?`${todo} cards in ${esc(t.t)} are not mastered yet. That is about ${Math.ceil(todo/left)} a day to be ready by ${fmt(t.d)}.`:`Every card in ${esc(t.t)} is mastered. Keep reviewing to hold it.`}</p>
   <div class="tw"><table><thead><tr><th>TEST</th><th>DATE</th><th>COVERS</th><th>IN</th></tr></thead><tbody>${rows}</tbody></table></div>
   <p class="sub" style="margin-top:14px">The guide's schedule, midterm list and final list do not always agree on which week a topic belongs to, so confirm with your flight if a test covers something unexpected.</p>`;
 }
 
-function buildQ(c, pool, img) {
-  const first = x => x.a.split("\n")[0];
-  let same = pool.filter(x => x !== c && x.g === c.g);
-  if (same.length < 3) same = same.concat(shuffle(pool.filter(x => x !== c && x.g !== c.g)));
-  const right = first(c); const opts = [right];
-  for (const x of shuffle(same)) { const v = first(x); if (!opts.includes(v)) opts.push(v); if (opts.length === 4) break }
-  return { c, img: !!img && photos(c).length > 0, right, opts: shuffle(opts) };
+function buildQ(c,pool,img){
+  const first=x=>x.a.split("\n")[0];
+  let same=pool.filter(x=>x!==c&&x.g===c.g);
+  if(same.length<3)same=same.concat(shuffle(pool.filter(x=>x!==c&&x.g!==c.g)));
+  const right=first(c);const opts=[right];
+  for(const x of shuffle(same)){const v=first(x);if(!opts.includes(v))opts.push(v);if(opts.length===4)break}
+  return{c,img:!!img&&photos(c).length>0,right,opts:shuffle(opts)};
 }
-const qPrompt = q => q.img ? shots(q.c, true) + '<p class="ft">Who or what is this?</p>' : '<p class="ft">' + esc(q.c.q) + '</p>';
-const mmss = ms => { const t = Math.max(0, Math.round(ms / 1000)); return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0") };
-const paint = () => { const e = $("#timer"); if (e && T && !T.done) e.textContent = mmss(T.end - Date.now()) };
+const qPrompt=q=>q.img?shots(q.c,true)+'<p class="ft">Who or what is this?</p>':'<p class="ft">'+esc(q.c.q)+'</p>';
+const mmss=ms=>{const t=Math.max(0,Math.round(ms/1000));return Math.floor(t/60)+":"+String(t%60).padStart(2,"0")};
+const paint=()=>{const e=$("#timer");if(e&&T&&!T.done)e.textContent=mmss(T.end-Date.now())};
 
-const TYPED_MAX = 60;
-const norm = x => String(x).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\u4e00-\u9fff]/g, "");
-const canType = c => { const L = c.a.split("\n"); return L[0].length <= TYPED_MAX && (c.kind === "zh" || L.slice(1).every(l => l.trim().startsWith("/"))) };
-const accepted = c => {
-  const set = new Set(); const L = c.a.split("\n");
-  (c.kind === "zh" ? L : [L[0]]).forEach(line => {
-    const v = [line, line.replace(/\s*\([^)]*\)/g, "")];
-    const m = line.match(/\(([^)]*)\)\s*\*?\s*$/);
-    if (m && /^[A-Za-z0-9\/\- ]{2,12}$/.test(m[1])) v.push(m[1]);
-    v.forEach(x => { const k = norm(x); if (k) set.add(k) });
+const TYPED_MAX=60;
+const norm=x=>String(x).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9\u4e00-\u9fff]/g,"");
+const canType=c=>{const L=c.a.split("\n");return L[0].length<=TYPED_MAX&&(c.kind==="zh"||L.slice(1).every(l=>l.trim().startsWith("/")))};
+const accepted=c=>{
+  const set=new Set();const L=c.a.split("\n");
+  (c.kind==="zh"?L:[L[0]]).forEach(line=>{
+    const v=[line,line.replace(/\s*\([^)]*\)/g,"")];
+    const m=line.match(/\(([^)]*)\)\s*\*?\s*$/);
+    if(m&&/^[A-Za-z0-9\/\- ]{2,12}$/.test(m[1]))v.push(m[1]);
+    v.forEach(x=>{const k=norm(x);if(k)set.add(k)});
   });
   return set;
 };
-const typedMatch = (x, c) => { const k = norm(x || ""); return !!k && accepted(c).has(k) };
+const typedMatch=(x,c)=>{const k=norm(x||"");return !!k&&accepted(c).has(k)};
 
-function startTest(cards, n, label, typed) {
-  const pool = C.filter(baseVis);
-  T = { qs: shuffle(cards).slice(0, n).map(c => { const q = buildQ(c, pool, Math.random() < .4); if (typed) q.right = c.a.split("\n").filter(l => !l.trim().startsWith("/")).join(" / "); return q }), i: 0, ans: [], label: typed ? label + " (typed)" : label, typed: !!typed, start: Date.now(), limit: n * 45000, done: false };
-  T.end = T.start + T.limit;
+function startTest(cards,n,label,typed){
+  const pool=C.filter(baseVis);
+  T={qs:shuffle(cards).slice(0,n).map(c=>{const q=buildQ(c,pool,Math.random()<.4);if(typed)q.right=c.a.split("\n").filter(l=>!l.trim().startsWith("/")).join(" / ");return q}),i:0,ans:[],label:typed?label+" (typed)":label,typed:!!typed,start:Date.now(),limit:n*45000,done:false};
+  T.end=T.start+T.limit;
   clearInterval(tick);
-  tick = setInterval(() => { if (T.end - Date.now() <= 0) finish(); else paint() }, 500);
+  tick=setInterval(()=>{if(T.end-Date.now()<=0)finish();else paint()},500);
   render();
 }
-function finish() {
-  if (!T || T.done) return;
+function finish(){
+  if(!T||T.done)return;
   clearInterval(tick);
-  T.used = Math.min(T.limit, Date.now() - T.start);
-  T.res = T.qs.map((q, j) => T.typed ? typedMatch(T.ans[j], q.c) : T.ans[j] != null && q.opts[T.ans[j]] === q.right);
-  if (T.typed) T.qs.forEach((q, j) => { q.typed = T.ans[j] });
-  T.res.forEach((ok, j) => rate(T.qs[j].c, ok));
-  const h = store.get("wk2_tests", []);
-  h.unshift({ d: today(), l: T.label, s: T.res.filter(Boolean).length, n: T.qs.length });
-  store.set("wk2_tests", h.slice(0, 8)); ping();
-  T.done = true; render();
+  T.used=Math.min(T.limit,Date.now()-T.start);
+  T.res=T.qs.map((q,j)=>T.typed?typedMatch(T.ans[j],q.c):T.ans[j]!=null&&q.opts[T.ans[j]]===q.right);
+  if(T.typed)T.qs.forEach((q,j)=>{q.typed=T.ans[j]});
+  T.res.forEach((ok,j)=>rate(T.qs[j].c,ok));
+  const h=store.get("wk2_tests",[]);
+  h.unshift({d:today(),l:T.label,s:T.res.filter(Boolean).length,n:T.qs.length});
+  store.set("wk2_tests",h.slice(0,8));ping();
+  T.done=true;render();
 }
 
-const TS = { mode: "sets", set: 0, weeks: new Set(), topics: new Set() };
-function setupView() {
-  const app = $("#app");
-  const nt = nextTest(), tm = cfg.term === "All" ? termOf(nt) : cfg.term;
-  const sets = [["Next test", scopeCards(weeksFor(nt), termOf(nt))], ...SCHED.filter(x => x.big && termOf(x) === tm).map(x => [x.t, scopeCards(weeksFor(x), tm)]), ["Everything", C.filter(visible)]];
-  const vis = C.filter(visible);
-  const weeks = [...new Set(vis.filter(c => c.kind !== "job").map(c => c.w))].sort((a, b) => a - b);
-  const tops = [...new Map(vis.map(c => [gk(c), c])).values()].sort((a, b) => a.w - b.w || a.g.localeCompare(b.g));
-  const n = cfg.tn || 20;
-  const pk = cs => cfg.typed ? cs.filter(canType) : cs;
-  if (TS.set >= sets.length) TS.set = 0;
-  let pool, label;
-  if (TS.mode === "weeks") { pool = vis.filter(c => c.kind !== "job" && TS.weeks.has(c.w)); label = "Weeks " + [...TS.weeks].sort((a, b) => a - b).join(", ") }
-  else if (TS.mode === "topics") { pool = vis.filter(c => TS.topics.has(gk(c))); const f = tops.find(c => TS.topics.has(gk(c))); label = f && TS.topics.size === 1 ? f.g : TS.topics.size + " topics" }
-  else { label = sets[TS.set][0]; pool = sets[TS.set][1] }
-  pool = pk(pool);
-  const hist = store.get("wk2_tests", []);
-  const panel = TS.mode === "weeks"
-    ? `<div class="row">${weeks.map(w => `<button class="tg" data-w="${w}" aria-pressed="${TS.weeks.has(w)}">${w ? "Week " + w : "No week"}</button>`).join("")}<button class="tg" id="clr">Clear</button></div>`
-    : TS.mode === "topics"
-      ? `<div class="chips">${tops.map(c => `<button class="tg" data-t="${esc(gk(c))}" aria-pressed="${TS.topics.has(gk(c))}">${esc(c.g)} <small>${c.w ? "Week " + c.w : "Reference"}</small></button>`).join("")}</div><div class="row"><button class="tg" id="clr">Clear</button></div>`
-      : `<div class="row">${sets.map(([l, cs], i) => `<button class="tg" data-s="${i}" aria-pressed="${i === TS.set}">${esc(l)} (${pk(cs).length})</button>`).join("")}</div>`;
-  app.innerHTML = `<h2 class="h">Test</h2><p class="sub">No feedback until you submit, like the real thing. ${Math.min(n, pool.length || n)} questions in ${Math.round(Math.min(n, pool.length || n) * .75)} minutes.</p>
+const TS={mode:"sets",set:0,weeks:new Set(),topics:new Set()};
+function setupView(){
+  const app=$("#app");
+  const nt=nextTest(),tm=cfg.term==="All"?termOf(nt):cfg.term;
+  const sets=[["Next test",scopeCards(weeksFor(nt),termOf(nt))],...SCHED.filter(x=>x.big&&termOf(x)===tm).map(x=>[x.t,scopeCards(weeksFor(x),tm)]),["Everything",C.filter(visible)]];
+  const vis=C.filter(visible);
+  const weeks=[...new Set(vis.filter(c=>c.kind!=="job").map(c=>c.w))].sort((a,b)=>a-b);
+  const tops=[...new Map(vis.map(c=>[gk(c),c])).values()].sort((a,b)=>a.w-b.w||a.g.localeCompare(b.g));
+  const n=cfg.tn||20;
+  const pk=cs=>cfg.typed?cs.filter(canType):cs;
+  if(TS.set>=sets.length)TS.set=0;
+  let pool,label;
+  if(TS.mode==="weeks"){pool=vis.filter(c=>c.kind!=="job"&&TS.weeks.has(c.w));label="Weeks "+[...TS.weeks].sort((a,b)=>a-b).join(", ")}
+  else if(TS.mode==="topics"){pool=vis.filter(c=>TS.topics.has(gk(c)));const f=tops.find(c=>TS.topics.has(gk(c)));label=f&&TS.topics.size===1?f.g:TS.topics.size+" topics"}
+  else{label=sets[TS.set][0];pool=sets[TS.set][1]}
+  pool=pk(pool);
+  const hist=store.get("wk2_tests",[]);
+  const panel=TS.mode==="weeks"
+    ?`<div class="row">${weeks.map(w=>`<button class="tg" data-w="${w}" aria-pressed="${TS.weeks.has(w)}">${w?"Week "+w:"No week"}</button>`).join("")}<button class="tg" id="clr">Clear</button></div>`
+    :TS.mode==="topics"
+    ?`<div class="chips">${tops.map(c=>`<button class="tg" data-t="${esc(gk(c))}" aria-pressed="${TS.topics.has(gk(c))}">${esc(c.g)} <small>${c.w?"Week "+c.w:"Reference"}</small></button>`).join("")}</div><div class="row"><button class="tg" id="clr">Clear</button></div>`
+    :`<div class="row">${sets.map(([l,cs],i)=>`<button class="tg" data-s="${i}" aria-pressed="${i===TS.set}">${esc(l)} (${pk(cs).length})</button>`).join("")}</div>`;
+  app.innerHTML=`<h2 class="h">Test</h2><p class="sub">No feedback until you submit, like the real thing. ${Math.min(n,pool.length||n)} questions in ${Math.round(Math.min(n,pool.length||n)*.75)} minutes.</p>
   <div class="srow"><span class="lbl">Format</span><button class="tg" data-f="mc" aria-pressed="${!cfg.typed}">Multiple choice</button><button class="tg" data-f="ty" aria-pressed="${!!cfg.typed}">Typed answers</button></div>
-  ${cfg.typed ? '<p class="note">Capital letters and punctuation do not matter, but spelling does. Long answers like the Code of Conduct are left out because they are too long to type.</p>' : ""}
-  <div class="srow"><span class="lbl">Questions</span>${[10, 20, 30].map(x => `<button class="tg" data-n="${x}" aria-pressed="${x === n}">${x}</button>`).join("")}</div>
-  <div class="srow"><span class="lbl">Cover</span><button class="tg" data-m="sets" aria-pressed="${TS.mode === "sets"}">Quick sets</button><button class="tg" data-m="weeks" aria-pressed="${TS.mode === "weeks"}">By week</button><button class="tg" data-m="topics" aria-pressed="${TS.mode === "topics"}">By topic</button></div>
+  ${cfg.typed?'<p class="note">Capital letters and punctuation do not matter, but spelling does. Long answers like the Code of Conduct are left out because they are too long to type.</p>':""}
+  <div class="srow"><span class="lbl">Questions</span>${[10,20,30].map(x=>`<button class="tg" data-n="${x}" aria-pressed="${x===n}">${x}</button>`).join("")}</div>
+  <div class="srow"><span class="lbl">Cover</span><button class="tg" data-m="sets" aria-pressed="${TS.mode==="sets"}">Quick sets</button><button class="tg" data-m="weeks" aria-pressed="${TS.mode==="weeks"}">By week</button><button class="tg" data-m="topics" aria-pressed="${TS.mode==="topics"}">By topic</button></div>
   ${panel}
-  <div class="srow"><button class="btn go" id="start" ${pool.length < 4 ? "disabled" : ""}>Start test</button><span class="sub" style="margin:0">${pool.length} cards available${pool.length && pool.length < 4 ? ", need at least 4" : ""}</span></div>
-  ${hist.length ? `<details class="det"><summary>Recent scores</summary><div class="tw"><table><tbody>${hist.map(h => `<tr><td>${fmt(h.d)}</td><td>${esc(h.l)}</td><td>${h.s}/${h.n}</td></tr>`).join("")}</tbody></table></div></details>` : ""}`;
-  const go = () => render();
-  document.querySelectorAll("#app [data-f]").forEach(b => b.onclick = () => { cfg.typed = b.dataset.f === "ty"; saveCfg(); go() });
-  document.querySelectorAll("#app [data-n]").forEach(b => b.onclick = () => { cfg.tn = +b.dataset.n; saveCfg(); go() });
-  document.querySelectorAll("#app [data-m]").forEach(b => b.onclick = () => { TS.mode = b.dataset.m; go() });
-  document.querySelectorAll("#app [data-s]").forEach(b => b.onclick = () => { TS.set = +b.dataset.s; go() });
-  document.querySelectorAll("#app [data-w]").forEach(b => b.onclick = () => { const w = +b.dataset.w; TS.weeks.has(w) ? TS.weeks.delete(w) : TS.weeks.add(w); go() });
-  document.querySelectorAll("#app [data-t]").forEach(b => b.onclick = () => { const k = b.dataset.t; TS.topics.has(k) ? TS.topics.delete(k) : TS.topics.add(k); go() });
-  if ($("#clr")) $("#clr").onclick = () => { TS.weeks.clear(); TS.topics.clear(); go() };
-  $("#start").onclick = () => { if (pool.length >= 4) startTest(pool, Math.min(n, pool.length), label, cfg.typed) };
+  <div class="srow"><button class="btn go" id="start" ${pool.length<4?"disabled":""}>Start test</button><span class="sub" style="margin:0">${pool.length} cards available${pool.length&&pool.length<4?", need at least 4":""}</span></div>
+  ${hist.length?`<details class="det"><summary>Recent scores</summary><div class="tw"><table><tbody>${hist.map(h=>`<tr><td>${fmt(h.d)}</td><td>${esc(h.l)}</td><td>${h.s}/${h.n}</td></tr>`).join("")}</tbody></table></div></details>`:""}`;
+  const go=()=>render();
+  document.querySelectorAll("#app [data-f]").forEach(b=>b.onclick=()=>{cfg.typed=b.dataset.f==="ty";saveCfg();go()});
+  document.querySelectorAll("#app [data-n]").forEach(b=>b.onclick=()=>{cfg.tn=+b.dataset.n;saveCfg();go()});
+  document.querySelectorAll("#app [data-m]").forEach(b=>b.onclick=()=>{TS.mode=b.dataset.m;go()});
+  document.querySelectorAll("#app [data-s]").forEach(b=>b.onclick=()=>{TS.set=+b.dataset.s;go()});
+  document.querySelectorAll("#app [data-w]").forEach(b=>b.onclick=()=>{const w=+b.dataset.w;TS.weeks.has(w)?TS.weeks.delete(w):TS.weeks.add(w);go()});
+  document.querySelectorAll("#app [data-t]").forEach(b=>b.onclick=()=>{const k=b.dataset.t;TS.topics.has(k)?TS.topics.delete(k):TS.topics.add(k);go()});
+  if($("#clr"))$("#clr").onclick=()=>{TS.weeks.clear();TS.topics.clear();go()};
+  $("#start").onclick=()=>{if(pool.length>=4)startTest(pool,Math.min(n,pool.length),label,cfg.typed)};
 }
 
-function test() {
-  const app = $("#app");
-  if (!T) { setupView(); return }
-  if (T.done) {
-    const n = T.qs.length, s = T.res.filter(Boolean).length, pct = Math.round(s / n * 100);
-    const by = {}; T.qs.forEach((q, j) => { const g = q.c.g; by[g] = by[g] || [0, 0]; by[g][1]++; if (T.res[j]) by[g][0]++ });
-    const missed = T.qs.filter((q, j) => !T.res[j]);
-    app.innerHTML = `<div class="done"><b>${s}/${n}</b><p>${pct}%, finished in ${mmss(T.used)}</p></div>
-    <h2 class="h" style="margin-top:22px">By topic</h2><div class="tw"><table><tbody>${Object.entries(by).map(([g, v]) => `<tr><td>${esc(g)}</td><td>${v[0]}/${v[1]}</td></tr>`).join("")}</tbody></table></div>
-    ${missed.length ? `<h2 class="h" style="margin-top:22px">Missed</h2><div class="rows">${missed.map(q => `<div class="miss-item">${q.img ? shots(q.c) : `<b>${esc(q.c.q)}</b>`}<p>Correct: ${esc(q.right)}${q.typed ? `<br>You typed: ${esc(q.typed)}` : ""}</p></div>`).join("")}</div>` : ""}
-    <div class="acts" style="margin-top:18px">${missed.length ? '<button class="btn go" id="retry">Retry missed</button>' : ""}<button class="btn" id="newt">New test</button><button class="btn" id="toHome">Home</button></div>`;
-    if (missed.length) $("#retry").onclick = () => startTest(missed.map(q => q.c), missed.length, "Retry missed", T.typed);
-    $("#newt").onclick = () => { T = null; render() };
-    $("#toHome").onclick = () => { T = null; location.hash = "home" };
+function test(){
+  const app=$("#app");
+  if(!T){setupView();return}
+  if(T.done){
+    const n=T.qs.length,s=T.res.filter(Boolean).length,pct=Math.round(s/n*100);
+    const by={};T.qs.forEach((q,j)=>{const g=q.c.g;by[g]=by[g]||[0,0];by[g][1]++;if(T.res[j])by[g][0]++});
+    const missed=T.qs.filter((q,j)=>!T.res[j]);
+    app.innerHTML=`<div class="done"><b>${s}/${n}</b><p>${pct}%, finished in ${mmss(T.used)}</p></div>
+    <h2 class="h" style="margin-top:22px">By topic</h2><div class="tw"><table><tbody>${Object.entries(by).map(([g,v])=>`<tr><td>${esc(g)}</td><td>${v[0]}/${v[1]}</td></tr>`).join("")}</tbody></table></div>
+    ${missed.length?`<h2 class="h" style="margin-top:22px">Missed</h2><div class="rows">${missed.map(q=>`<div class="miss-item">${q.img?shots(q.c):`<b>${esc(q.c.q)}</b>`}<p>Correct: ${esc(q.right)}${q.typed?`<br>You typed: ${esc(q.typed)}`:""}</p></div>`).join("")}</div>`:""}
+    <div class="acts" style="margin-top:18px">${missed.length?'<button class="btn go" id="retry">Retry missed</button>':""}<button class="btn" id="newt">New test</button><button class="btn" id="toHome">Home</button></div>`;
+    if(missed.length)$("#retry").onclick=()=>startTest(missed.map(q=>q.c),missed.length,"Retry missed",T.typed);
+    $("#newt").onclick=()=>{T=null;render()};
+    $("#toHome").onclick=()=>{T=null;location.hash="home"};
     return;
   }
-  const q = T.qs[T.i], n = T.qs.length;
-  app.innerHTML = `<div class="row"><span class="timer" id="timer"></span><span class="sub" style="margin:0">Question ${T.i + 1} of ${n}</span></div>
-  <div class="qnav">${T.qs.map((_, j) => `<button data-j="${j}" class="${T.ans[j] != null && T.ans[j] !== "" ? "filled" : ""} ${j === T.i ? "cur" : ""}">${j + 1}</button>`).join("")}</div>
+  const q=T.qs[T.i],n=T.qs.length;
+  app.innerHTML=`<div class="row"><span class="timer" id="timer"></span><span class="sub" style="margin:0">Question ${T.i+1} of ${n}</span></div>
+  <div class="qnav">${T.qs.map((_,j)=>`<button data-j="${j}" class="${T.ans[j]!=null&&T.ans[j]!==""?"filled":""} ${j===T.i?"cur":""}">${j+1}</button>`).join("")}</div>
   <div class="qcard">${qPrompt(q)}</div>
-  ${T.typed ? `<input type="text" id="ti" class="ti" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type your answer" aria-label="Your answer" value="${esc(T.ans[T.i] || "")}">` : `<div class="opts">${q.opts.map((o, j) => `<button class="ans ${T.ans[T.i] === j ? "sel" : ""}" data-j="${j}">${esc(o)}</button>`).join("")}</div>`}
-  <div class="acts" style="margin-top:14px"><button class="btn" id="pv" ${T.i ? "" : "disabled"}>Previous</button><button class="btn" id="nx" ${T.i < n - 1 ? "" : "disabled"}>Next</button><button class="btn go" id="sub">Submit test</button></div>`;
-  document.querySelectorAll(".ans").forEach(b => b.onclick = () => { T.ans[T.i] = +b.dataset.j; render() });
-  if (T.typed) { const ti = $("#ti"); ti.oninput = () => { T.ans[T.i] = ti.value }; ti.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); if (T.i < n - 1) { T.i++; render() } else $("#sub").focus() } }; ti.focus() }
-  document.querySelectorAll(".qnav button").forEach(b => b.onclick = () => { T.i = +b.dataset.j; render() });
-  $("#pv").onclick = () => { T.i--; render() };
-  $("#nx").onclick = () => { T.i++; render() };
-  $("#sub").onclick = () => { const left = n - T.ans.filter(x => x != null && x !== "").length; if (!left || confirm(left + " unanswered. Submit anyway?")) finish() };
+  ${T.typed?`<input type="text" id="ti" class="ti" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type your answer" aria-label="Your answer" value="${esc(T.ans[T.i]||"")}">`:`<div class="opts">${q.opts.map((o,j)=>`<button class="ans ${T.ans[T.i]===j?"sel":""}" data-j="${j}">${esc(o)}</button>`).join("")}</div>`}
+  <div class="acts" style="margin-top:14px"><button class="btn" id="pv" ${T.i?"":"disabled"}>Previous</button><button class="btn" id="nx" ${T.i<n-1?"":"disabled"}>Next</button><button class="btn go" id="sub">Submit test</button></div>`;
+  document.querySelectorAll(".ans").forEach(b=>b.onclick=()=>{T.ans[T.i]=+b.dataset.j;render()});
+  if(T.typed){const ti=$("#ti");ti.oninput=()=>{T.ans[T.i]=ti.value};ti.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();if(T.i<n-1){T.i++;render()}else $("#sub").focus()}};ti.focus()}
+  document.querySelectorAll(".qnav button").forEach(b=>b.onclick=()=>{T.i=+b.dataset.j;render()});
+  $("#pv").onclick=()=>{T.i--;render()};
+  $("#nx").onclick=()=>{T.i++;render()};
+  $("#sub").onclick=()=>{const left=n-T.ans.filter(x=>x!=null&&x!=="").length;if(!left||confirm(left+" unanswered. Submit anyway?"))finish()};
   paint();
 }
 
-const terms = () => [...new Set(C.map(termOf))];
-const termLabel = t => (typeof TERM_LABEL !== "undefined" && TERM_LABEL[t]) || t;
-function termSw() {
-  const el = $("#termsw"), ts = terms();
-  if (ts.length < 2) { el.innerHTML = ""; return }
-  el.innerHTML = [...ts, "All"].map(t => `<button class="tg" data-t="${esc(t)}" aria-pressed="${cfg.term === t}">${esc(t === "All" ? "All" : termLabel(t))}</button>`).join("");
-  el.querySelectorAll("button").forEach(b => b.onclick = () => { cfg.term = b.dataset.t; saveCfg(); D = null; RC = null; T = null; RS = null; render() });
+const terms=()=>[...new Set(C.map(termOf))];
+const termLabel=t=>(typeof TERM_LABEL!=="undefined"&&TERM_LABEL[t])||t;
+function termSw(){
+  const el=$("#termsw"),ts=terms();
+  if(ts.length<2){el.innerHTML="";return}
+  el.innerHTML=[...ts,"All"].map(t=>`<button class="tg" data-t="${esc(t)}" aria-pressed="${cfg.term===t}">${esc(t==="All"?"All":termLabel(t))}</button>`).join("");
+  el.querySelectorAll("button").forEach(b=>b.onclick=()=>{cfg.term=b.dataset.t;saveCfg();D=null;RC=null;T=null;RS=null;render()});
 }
-let JOBS = [];
-const JF = { sf: false };
-const SF_CODES = new Set(["13A", "13S", "14N", "17D", "17S", "17X", "62E", "63A"]);
-const JOB_FIX = [[/Enviromental/g, "Environmental"], [/Resoution/g, "Resolution"], [/Otorlaryngologist/g, "Otorhinolaryngologist"]];
-function loadJobs() {
-  return fetch("afsc.txt").then(r => r.ok ? r.text() : "").catch(() => "").then(t => {
-    const seen = new Set();
-    t.split(/\r?\n/).forEach(line => {
-      const i = line.indexOf("#"); if (i < 1) return;
-      const code = line.slice(0, i).trim().toUpperCase().replace(/^(\d\d[A-Z])O$/, "$10");
-      let title = line.slice(i + 1).trim();
-      JOB_FIX.forEach(([a, b]) => { title = title.replace(a, b) });
-      const key = code.replace(/[X0]$/, "");
-      if (!key || seen.has(key)) return;
-      seen.add(key); JOBS.push({ code: key, title, sf: SF_CODES.has(key) });
+let JOBS=[];
+const JF={sf:false};
+const SF_CODES=new Set(["13A","13S","14N","17D","17S","17X","62E","63A"]);
+const JOB_FIX=[[/Enviromental/g,"Environmental"],[/Resoution/g,"Resolution"],[/Otorlaryngologist/g,"Otorhinolaryngologist"]];
+function loadJobs(){
+  return fetch("afsc.txt").then(r=>r.ok?r.text():"").catch(()=>"").then(t=>{
+    const seen=new Set();
+    t.split(/\r?\n/).forEach(line=>{
+      const i=line.indexOf("#");if(i<1)return;
+      const code=line.slice(0,i).trim().toUpperCase().replace(/^(\d\d[A-Z])O$/,"$10");
+      let title=line.slice(i+1).trim();
+      JOB_FIX.forEach(([a,b])=>{title=title.replace(a,b)});
+      const key=code.replace(/[X0]$/,"");
+      if(!key||seen.has(key))return;
+      seen.add(key);JOBS.push({code:key,title,sf:SF_CODES.has(key)});
     });
-    JOBS.forEach(j => {
-      C.push({ w: 0, g: "AF Officer Codes", q: "AFSC " + j.code, a: j.title, kind: "job" });
-      if (j.sf) C.push({ w: 0, g: "SF Officer Codes", q: "Space Force " + j.code, a: j.title, kind: "job" });
+    JOBS.forEach(j=>{
+      C.push({w:0,g:"AF Officer Codes",q:"AFSC "+j.code,a:j.title,kind:"job"});
+      if(j.sf)C.push({w:0,g:"Space Force Officer Codes",q:"Space Force "+j.code,a:j.title,kind:"job"});
     });
   });
 }
-function jobsView() {
-  const app = $("#app");
-  if (!JOBS.length) { app.innerHTML = '<h2 class="h">Jobs</h2><p class="note">The job list file was not found. Add afsc.txt next to index.html.</p>'; return }
-  app.innerHTML = `<h2 class="h">Jobs</h2><p class="sub">Officer career codes. Space Force officers use many of the same codes. Turn on Career codes in Drill to study them as cards.</p>
+function jobsView(){
+  const app=$("#app");
+  if(!JOBS.length){app.innerHTML='<h2 class="h">Jobs</h2><p class="note">The job list file was not found. Add afsc.txt next to index.html.</p>';return}
+  app.innerHTML=`<h2 class="h">Jobs</h2><p class="sub">Officer career codes. Space Force officers use many of the same codes. Turn on Career codes in Drill to study them as cards.</p>
   <div class="row"><input type="search" id="jq" placeholder="Search a code or job title" aria-label="Search jobs"><button class="tg" id="jsf" aria-pressed="${JF.sf}">Space Force only</button></div><div id="jl"></div>`;
-  const draw = () => {
-    const q = $("#jq").value.trim().toLowerCase();
-    const l = JOBS.filter(j => (!JF.sf || j.sf) && (!q || j.code.toLowerCase().includes(q) || j.title.toLowerCase().includes(q)));
-    $("#jl").innerHTML = l.length ? `<div class="tw"><table><thead><tr><th>CODE</th><th>JOB</th><th>SERVICE</th></tr></thead><tbody>${l.map(j => `<tr><td><b>${esc(j.code)}</b></td><td>${esc(j.title)}</td><td>${j.sf ? "Air Force, Space Force" : "Air Force"}</td></tr>`).join("")}</tbody></table></div>` : '<p class="note">No jobs match.</p>';
+  const draw=()=>{
+    const q=$("#jq").value.trim().toLowerCase();
+    const l=JOBS.filter(j=>(!JF.sf||j.sf)&&(!q||j.code.toLowerCase().includes(q)||j.title.toLowerCase().includes(q)));
+    $("#jl").innerHTML=l.length?`<div class="tw"><table><thead><tr><th>CODE</th><th>JOB</th><th>SERVICE</th></tr></thead><tbody>${l.map(j=>`<tr><td><b>${esc(j.code)}</b></td><td>${esc(j.title)}</td><td>${j.sf?"Air Force, Space Force":"Air Force"}</td></tr>`).join("")}</tbody></table></div>`:'<p class="note">No jobs match.</p>';
   };
-  $("#jq").oninput = draw;
-  $("#jsf").onclick = () => { JF.sf = !JF.sf; $("#jsf").setAttribute("aria-pressed", JF.sf); draw() };
+  $("#jq").oninput=draw;
+  $("#jsf").onclick=()=>{JF.sf=!JF.sf;$("#jsf").setAttribute("aria-pressed",JF.sf);draw()};
   draw();
 }
-const RANKS = [[45, "Cadet Colonel", [2, 2, 2, 2]], [30, "Cadet Lieutenant Colonel", [2, 2, 2]], [21, "Cadet Major", [3, 1.4, 3]], [14, "Cadet Captain", [2.4, 2.4]], [7, "Cadet First Lieutenant", [1.4, 3]], [3, "Cadet Second Lieutenant", [3]]];
-const rankFor = n => RANKS.find(r => n >= r[0]);
-const nextRank = r => RANKS[RANKS.indexOf(r) - 1];
-function rankIcon(r) {
-  const bars = r[2], gap = 2.2, total = bars.reduce((a, b) => a + b, 0) + gap * (bars.length - 1);
-  let y = (24 - total) / 2;
-  const rects = bars.map(h => { const o = `<rect x="5" y="${y.toFixed(2)}" width="14" height="${h}" rx=".6" fill="#dfe5ec"/>`; y += h + gap; return o }).join("");
-  return `<svg class="rank-icon" viewBox="0 0 24 24" role="img" aria-label="${esc(r[1])}"><rect x="1.5" y="1.5" width="21" height="21" rx="3" fill="#0b0f14" stroke="#3a4656"/>${rects}</svg>`;
+
+// Account Profile & Stats View
+function accountView(){
+  const app=$("#app");
+
+  // Wait until Firebase finishes checking the saved session.
+  if(!window.authInitialized){
+    app.innerHTML=`
+      <h2 class="h">Account Settings</h2>
+      <p class="note">Checking your sign-in status...</p>
+    `;
+    return;
+  }
+
+  const user=typeof window.getUser==="function"?window.getUser():null;
+
+  if(!user){
+    app.innerHTML=`
+      <h2 class="h">Account Settings</h2>
+      <p class="note">Please sign in using the button at the top right to manage your profile.</p>
+    `;
+    return;
+  }
+
+  const currentName=user.displayName||user.email?.split("@")[0]||"Cadet";
+  const currentPhoto=user.photoURL||"";
+
+  const allCards=typeof C!=="undefined"&&typeof visible==="function"?C.filter(visible):[];
+  const masteredCount=typeof mastered==="function"?allCards.filter(mastered).length:0;
+  const currentStreak=typeof streak==="function"?streak():0;
+
+  const currentWeek=window.getCurrentWeekId
+    ?window.getCurrentWeekId()
+    :today();
+
+  const savedXp=store.get("wk2_xp",{
+    weekId:currentWeek,
+    xp:0
+  });
+
+  const weeklyXp=savedXp.weekId===currentWeek
+    ?Number(savedXp.xp)||0
+    :0;
+
+  const lifetimeXp=window.getTotalXp();
+
+  app.innerHTML=`
+    <h2 class="h">Account & Cadet Profile</h2>
+    <p class="sub">Manage your identity and inspect your active standing.</p>
+
+    <div class="account-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:16px;">
+
+      <div class="qcard" style="margin:0;text-align:left;align-items:stretch;">
+        <h3 style="margin-top:0;font:700 1.2rem var(--d);">Identity</h3>
+        <label style="display:block;margin-bottom:12px;">
+          <b>Display Name</b>
+          <input type="text" id="acc-name" class="ti" value="${esc(currentName)}" placeholder="Enter your display name">
+        </label>
+        <label style="display:block;margin-bottom:16px;">
+          <b>Profile Picture URL</b>
+          <input type="url" id="acc-photo" class="ti" value="${esc(currentPhoto)}" placeholder="https://example.com/photo.jpg">
+        </label>
+        <div class="acts" style="justify-content:flex-start;">
+          <button class="btn go" id="save-profile">Save Changes</button>
+        </div>
+      </div>
+
+      <div class="qcard" style="margin:0;text-align:left;align-items:stretch;">
+        <h3 style="margin-top:0;font:700 1.2rem var(--d);">Active Standing</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;">
+          <div class="stat" style="padding:12px;">
+            <b>${currentStreak}</b>
+            <span>Day Streak</span>
+          </div>
+          <div class="stat" style="padding:12px;">
+            <b>${masteredCount}</b>
+            <span>Cards Mastered</span>
+          </div>
+          <div class="stat" style="padding:12px;">
+            <b>${weeklyXp}</b>
+            <span>Weekly XP</span>
+          </div>
+          <div class="stat" style="padding:12px;">
+            <b>${lifetimeXp}</b>
+            <span>Lifetime XP</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  `;
+
+  $("#save-profile").onclick=async()=>{
+    const name=$("#acc-name").value.trim();
+    const photo=$("#acc-photo").value.trim();
+    if(!name){
+      toast("Name cannot be empty");
+      return;
+    }
+    if(typeof window.updateUserProfile==="function"){
+      await window.updateUserProfile(name,photo);
+      render();
+    }
+  };
 }
-function mergeProgress(r) {
-  let changed = false;
-  const rs = r.srs || {};
-  Object.keys(rs).forEach(k => { const a = srs[k], b = rs[k]; if (!a || (b.t || 0) > (a.t || 0)) { srs[k] = b; changed = true } });
-  (r.days || []).forEach(d => { if (!days.includes(d)) { days.push(d); changed = true } });
+
+// Weekly Leaderboard View with Live Countdown & Clickable Profiles
+async function leaderboardView(){
+  const app=$("#app");
+
+  const getTimeRemaining=()=>{
+    const now=new Date();
+    const nextSunday=new Date(now);
+    const daysUntilSunday=(7-now.getDay())||7;
+
+    nextSunday.setDate(now.getDate()+daysUntilSunday);
+    nextSunday.setHours(0,0,0,0);
+
+    const diff=Math.max(0,nextSunday-now);
+    const days=Math.floor(diff/86400000);
+    const hours=Math.floor((diff%86400000)/3600000);
+    const minutes=Math.floor((diff%3600000)/60000);
+    const seconds=Math.floor((diff%60000)/1000);
+
+    return`${days}d ${hours}h ${minutes}m ${seconds}s`;
+  };
+
+  const header=`
+    <h2 class="h">Weekly Leaderboard</h2>
+    <p class="sub">Top cadets ranked by weekly XP. Rankings reset every Sunday.</p>
+    <div id="lb-timer" class="note lb-timer">
+      Reset in: ${getTimeRemaining()}
+    </div>
+  `;
+
+  app.innerHTML=header+`
+    <div id="lb-loading" class="note">Loading weekly rankings...</div>
+  `;
+
+  if(window.lbInterval)clearInterval(window.lbInterval);
+
+  window.lbInterval=setInterval(()=>{
+    const el=document.getElementById("lb-timer");
+    if(el)el.textContent=`Reset in: ${getTimeRemaining()}`;
+  },1000);
+
+  if(typeof window.fetchWeeklyLeaderboard!=="function"){
+    $("#lb-loading").textContent="Leaderboard connection is not ready. Please refresh the page.";
+    return;
+  }
+
+  let data;
+
+  try{
+    data=await window.fetchWeeklyLeaderboard();
+  }catch(err){
+    console.error("Leaderboard loading failed:",err);
+    const loading=$("#lb-loading");
+    if(loading)loading.textContent="Unable to load rankings. Please try again later.";
+    return;
+  }
+
+  if(location.hash!=="#leaderboard")return;
+
+  if(!data.length){
+    $("#lb-loading").textContent="No leaderboard records this week yet. Sign in and complete a review to participate.";
+    return;
+  }
+
+  const rows=data.map((item,index)=>`
+    <tr>
+      <td><b>#${index+1}</b></td>
+      <td>
+        <button class="lb-profile-btn" data-profile="${esc(item.id)}">
+          ${item.photo?`<img src="${esc(item.photo)}" class="lb-avatar" alt="">`:""}
+          <span>${esc(item.name)}</span>
+        </button>
+      </td>
+      <td><b>${item.xpWeekly}</b> XP</td>
+      <td><b>${item.mastered}</b> cards</td>
+      <td><b>${item.streak}</b> days</td>
+    </tr>
+  `).join("");
+
+  app.innerHTML=header+`
+    <div class="tw">
+      <table id="lb-table">
+        <thead>
+          <tr>
+            <th>RANK</th>
+            <th>CADET</th>
+            <th>WEEKLY XP</th>
+            <th>MASTERED</th>
+            <th>STREAK</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+
+  document.querySelectorAll("[data-profile]").forEach(button=>{
+    button.onclick=()=>window.viewCadetProfile(button.dataset.profile);
+  });
+}
+
+// Inspect Other Cadets' Profiles
+window.viewCadetProfile=async userId=>{
+  if(typeof window.fetchUserProfile!=="function")return;
+
+  const app=$("#app");
+  app.innerHTML='<p class="note">Loading cadet profile...</p>';
+
+  let profile;
+
+  try{
+    profile=await window.fetchUserProfile(userId);
+  }catch(err){
+    console.error("Profile loading failed:",err);
+    toast("Could not load cadet profile");
+    return;
+  }
+
+  if(!profile){
+    toast("Cadet profile not found");
+    return;
+  }
+
+  app.innerHTML=`
+    <h2 class="h">Cadet Profile</h2>
+    <p class="sub">Public cadet profile and study standing.</p>
+
+    <div class="qcard cadet-profile">
+      ${profile.photoURL?`<img src="${esc(profile.photoURL)}" class="profile-photo" alt="">`:""}
+
+      <h3>${esc(profile.displayName||"Cadet")}</h3>
+
+      <div class="profile-stats">
+        <div class="stat">
+          <b>${Number(profile.streak)||0}</b>
+          <span>Day Streak</span>
+        </div>
+
+        <div class="stat">
+          <b>${Number(profile.mastered)||0}</b>
+          <span>Total Mastered</span>
+        </div>
+
+        <div class="stat">
+          <b>${Number(profile.weekly?.xp)||0}</b>
+          <span>Weekly XP</span>
+        </div>
+
+        <div class="stat">
+          <b>${Number(profile.totalXp)||0}</b>
+          <span>Lifetime XP</span>
+        </div>
+      </div>
+
+      <div class="acts">
+        <button class="btn go" id="back-leaderboard">
+          Back to Leaderboard
+        </button>
+      </div>
+    </div>
+  `;
+
+  $("#back-leaderboard").onclick=()=>leaderboardView();
+};
+
+const RANKS=[[45,"Cadet Colonel",[2,2,2,2]],[30,"Cadet Lieutenant Colonel",[2,2,2]],[21,"Cadet Major",[3,1.4,3]],[14,"Cadet Captain",[2.4,2.4]],[7,"Cadet First Lieutenant",[1.4,3]],[3,"Cadet Second Lieutenant",[3]]];
+const rankFor=n=>RANKS.find(r=>n>=r[0]);
+const nextRank=r=>RANKS[RANKS.indexOf(r)-1];
+function rankIcon(r){
+  const bars=r[2],gap=2.2,total=bars.reduce((a,b)=>a+b,0)+gap*(bars.length-1);
+  let y=(24-total)/2;
+  const rects=bars.map(h=>{const o=`<rect x="5" y="${y.toFixed(2)}" width="14" height="${h}" rx=".6" fill="#dfe5ec"/>`;y+=h+gap;return o}).join("");
+  return`<svg class="rank-icon" viewBox="0 0 24 24" role="img" aria-label="${esc(r[1])}"><rect x="1.5" y="1.5" width="21" height="21" rx="3" fill="#0b0f14" stroke="#3a4656"/>${rects}</svg>`;
+}
+
+function mergeProgress(r){
+  let changed=false;
+  const rs=r.srs||{};
+
+  Object.keys(rs).forEach(k=>{
+    const a=srs[k],b=rs[k];
+    if(!a||(b.t||0)>(a.t||0)){
+      srs[k]=b;
+      changed=true;
+    }
+  });
+
+  (r.days||[]).forEach(d=>{
+    if(!days.includes(d)){
+      days.push(d);
+      changed=true;
+    }
+  });
+
   days.sort();
-  if (days.length > 90) days.splice(0, days.length - 90);
-  const lt = store.get("wk2_tests", []), seen = new Set(lt.map(x => JSON.stringify(x)));
-  const add = (r.tests || []).filter(x => !seen.has(JSON.stringify(x)));
-  if (add.length) { store.set("wk2_tests", [...lt, ...add].sort((x, y) => y.d < x.d ? -1 : y.d > x.d ? 1 : 0).slice(0, 8)); changed = true }
-  if (changed) { store.set("wk2_srs", srs); store.set("wk2_days", days) }
+  if(days.length>90)days.splice(0,days.length-90);
+
+  const lt=store.get("wk2_tests",[]);
+  const seen=new Set(lt.map(x=>JSON.stringify(x)));
+  const add=(r.tests||[]).filter(x=>!seen.has(JSON.stringify(x)));
+
+  if(add.length){
+    store.set("wk2_tests",[...lt,...add].sort((x,y)=>y.d<x.d?-1:y.d>x.d?1:0).slice(0,8));
+    changed=true;
+  }
+
+  if(changed){
+    store.set("wk2_srs",srs);
+    store.set("wk2_days",days);
+  }
+
+  // Merge weekly XP without double-counting.
+  if(r.xp&&r.xp.weekId){
+    const currentWeek=window.getCurrentWeekId
+      ?window.getCurrentWeekId()
+      :today();
+
+    if(r.xp.weekId===currentWeek){
+      const localXp=store.get("wk2_xp",{
+        weekId:currentWeek,
+        xp:0
+      });
+
+      const mergedXp=Math.max(
+        localXp.weekId===currentWeek?Number(localXp.xp)||0:0,
+        Number(r.xp.xp)||0
+      );
+
+      if(localXp.weekId!==currentWeek||localXp.xp!==mergedXp){
+        store.set("wk2_xp",{
+          weekId:currentWeek,
+          xp:mergedXp
+        });
+        changed=true;
+      }
+    }
+  }
+
+  // Merge lifetime XP using the higher value.
+  // This supports cloud data if totalXp is also included in the private sync.
+  if(r.totalXp!==undefined&&r.totalXp!==null){
+    const localTotal=Math.max(
+      0,
+      Number(store.get("wk2_total_xp",0))||0
+    );
+
+    const cloudTotal=Math.max(0,Number(r.totalXp)||0);
+    const mergedTotal=Math.max(localTotal,cloudTotal);
+
+    if(mergedTotal!==localTotal){
+      store.set("wk2_total_xp",mergedTotal);
+      changed=true;
+    }
+  }
+
   return changed;
 }
-const views = { home, drill, test, recite, plan, jobs: jobsView };
-function render() {
-  const r = views[location.hash.slice(1)] ? location.hash.slice(1) : "home";
-  document.querySelectorAll("#nav a").forEach(a => a.getAttribute("data-r") === r ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
-  const s = streak(), rk = rankFor(s), el = $("#streak");
-  el.innerHTML = (rk ? rankIcon(rk) + " " : "") + esc(s ? s + " day streak" : "No streak yet");
-  el.title = rk ? rk[1] + " streak rank" + (nextRank(rk) ? ". Next rank at " + nextRank(rk)[0] + " days." : ".") : "";
-  if (r !== "test") clearInterval(tick);
+
+// Robust Dropdown Handler for Mobile and Desktop
+function initDropdown(){
+  const btn=document.getElementById("moreBtn");
+  const menu=document.getElementById("moreMenu");
+  if(!btn||!menu)return;
+
+  btn.onclick=e=>{
+    e.stopPropagation();
+    menu.classList.toggle("show");
+  };
+
+  document.addEventListener("click",e=>{
+    if(!menu.contains(e.target)&&!btn.contains(e.target)){
+      menu.classList.remove("show");
+    }
+  });
+
+  menu.querySelectorAll("a").forEach(a=>{
+    a.onclick=()=>menu.classList.remove("show");
+  });
+}
+
+document.addEventListener("DOMContentLoaded",initDropdown);
+
+// Registered Views Mapping
+const views={home,drill,test,recite,plan,jobs:jobsView,account:accountView,leaderboard:leaderboardView};
+
+function render(){
+  const r=views[location.hash.slice(1)]?location.hash.slice(1):"home";
+
+  document.querySelectorAll("#nav a, .nav-drop-content a").forEach(a=>{
+    if(a.getAttribute("data-r")===r)a.setAttribute("aria-current","page");
+    else a.removeAttribute("aria-current");
+  });
+
+  const s=streak(),rk=rankFor(s),el=$("#streak");
+
+  if(el){
+    el.innerHTML=(rk?rankIcon(rk)+" ":"")+esc(s?s+" day streak":"No streak yet");
+    el.title=rk?rk[1]+" streak rank"+(nextRank(rk)?". Next rank at "+nextRank(rk)[0]+" days.":"."):"";
+  }
+
+  if(r!=="test")clearInterval(tick);
+
+  if(r!=="leaderboard"&&window.lbInterval){
+    clearInterval(window.lbInterval);
+    window.lbInterval=null;
+  }
+
   views[r]();
   termSw();
 }
-window.addEventListener("hashchange", () => { D = D && location.hash === "#drill" ? D : null; RC = RC && location.hash === "#drill" ? RC : null; T = T && location.hash === "#test" ? T : null; RS = null; render() });
-document.addEventListener("keydown", e => {
-  if (location.hash !== "#drill" || !D || !D.q[D.i] || e.target.tagName === "BUTTON" && e.key === " ") return;
-  const c = D.q[D.i];
-  if (e.key === " ") { e.preventDefault(); D.on = !D.on; render() }
-  else if (D.on && e.key === "1") { rate(c, false); D.miss++; D.q.splice(Math.min(D.q.length, D.i + 4), 0, c); D.i++; D.on = false; render() }
-  else if (D.on && e.key === "2") { rate(c, true); D.hit++; D.i++; D.on = false; render() }
+
+window.addEventListener("hashchange",()=>{
+  D=D&&location.hash==="#drill"?D:null;
+  RC=RC&&location.hash==="#drill"?RC:null;
+  T=T&&location.hash==="#test"?T:null;
+  RS=null;
+  render();
 });
-const baseTitle = document.title;
-document.addEventListener("visibilitychange", () => { document.title = document.hidden ? "Cadet, come back" : baseTitle });
-console.log("%cBriefing Room", "font:700 20px sans-serif;color:#ff5a36", "Built for Det 195. Found something? Good. Now go study.");
-function toast(m) { const t = document.createElement("div"); t.className = "toast"; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 2200) }
-function setNight(on) { if (on) document.documentElement.dataset.theme = "night"; else delete document.documentElement.dataset.theme; cfg.night = on; saveCfg() }
-if (cfg.night) document.documentElement.dataset.theme = "night";
-(function () {
-  const b = document.querySelector(".brand"); if (!b) return;
-  let n = 0, t = 0;
-  b.addEventListener("click", () => { const now = Date.now(); n = now - t < 1500 ? n + 1 : 1; t = now; if (n >= 5) { n = 0; const on = !cfg.night; setNight(on); toast(on ? "Night ops on" : "Night ops off") } });
+
+document.addEventListener("keydown",e=>{
+  if(location.hash!=="#drill"||!D||!D.q[D.i]||e.target.tagName==="BUTTON"&&e.key===" ")return;
+  const c=D.q[D.i];
+
+  if(e.key===" "){
+    e.preventDefault();
+    D.on=!D.on;
+    render();
+  }else if(D.on&&e.key==="1"){
+    rate(c,false);
+    D.miss++;
+    D.q.splice(Math.min(D.q.length,D.i+4),0,c);
+    D.i++;
+    D.on=false;
+    render();
+  }else if(D.on&&e.key==="2"){
+    rate(c,true);
+    D.hit++;
+    D.i++;
+    D.on=false;
+    render();
+  }
+});
+
+const baseTitle=document.title;
+document.addEventListener("visibilitychange",()=>{
+  document.title=document.hidden?"Cadet, come back":baseTitle;
+});
+
+console.log("%cBriefing Room","font:700 20px sans-serif;color:#ff5a36","Built for Det 195. Found something? Good. Now go study.");
+
+function toast(m){
+  const t=document.createElement("div");
+  t.className="toast";
+  t.textContent=m;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),2200);
+}
+
+function setNight(on){
+  if(on)document.documentElement.dataset.theme="night";
+  else delete document.documentElement.dataset.theme;
+  cfg.night=on;
+  saveCfg();
+}
+
+if(cfg.night)document.documentElement.dataset.theme="night";
+
+(function(){
+  const b=document.querySelector(".brand");
+  if(!b)return;
+  let n=0,t=0;
+
+  b.addEventListener("click",()=>{
+    const now=Date.now();
+    n=now-t<1500?n+1:1;
+    t=now;
+
+    if(n>=5){
+      n=0;
+      const on=!cfg.night;
+      setNight(on);
+      toast(on?"Night ops on":"Night ops off");
+    }
+  });
 })();
-if (!["All", ...terms()].includes(cfg.term)) { cfg.term = terms().length > 1 ? termOf(nextTest()) : "All"; saveCfg() }
+
+if(!["All",...terms()].includes(cfg.term)){
+  cfg.term=terms().length>1?termOf(nextTest()):"All";
+  saveCfg();
+}
+
 loadJobs().then(render);
-if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => { }));
+
+window.addEventListener("auth-state-changed", () => {
+  if (location.hash === "#account") {
+    render();
+  }
+});
