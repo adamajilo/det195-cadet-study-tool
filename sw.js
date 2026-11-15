@@ -1,5 +1,5 @@
-const CACHE="briefing-room-v1";
-const CORE=["./","index.html","style.css","app.js","data.js","songs.js","sync.js","firebase-config.js","manifest.webmanifest","icon-192.png","afsc.txt"];
+const CACHE="briefing-room-v2";
+const CORE=["./","index.html","style.css","app.js","data.js","songs.js","sync.js","board.js","board-sync.js","firebase-config.js","manifest.webmanifest","icon-192.png","afsc.txt"];
 
 self.addEventListener("install",e=>{
   e.waitUntil(
