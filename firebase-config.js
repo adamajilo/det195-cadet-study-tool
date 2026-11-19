@@ -1,0 +1,1 @@
+window.FIREBASE_CONFIG={apiKey:"AIzaSyAwzDwRKrpEMaHcPQw99e7qNInuGs-ZKpE",authDomain:"det-195-cadet-study-tool.firebaseapp.com",projectId:"det-195-cadet-study-tool",appId:"1:674032381115:web:70c3703c77b44255b54d9e"};
