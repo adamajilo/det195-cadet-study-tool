@@ -1,4 +1,3 @@
-
 const $=(s,r=document)=>r.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
 const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
@@ -52,20 +51,6 @@ const fmt=s=>new Date(s+"T00:00").toLocaleDateString("en-US",{weekday:"short",mo
 const cfg=Object.assign({zh:true,ac:false,rev:false},store.get("wk2_cfg",{}));
 const srs=store.get("wk2_srs",{});
 const days=store.get("wk2_days",[]);
-window.activateAccountStorage=uid=>{
-  const nextUid=uid||null;
-
-  if(store.getAccount()===nextUid)return;
-
-  store.setAccount(nextUid);
-
-  const savedSrs=store.get("wk2_srs",{});
-  Object.keys(srs).forEach(k=>delete srs[k]);
-  Object.assign(srs,savedSrs);
-
-  const savedDays=store.get("wk2_days",[]);
-  days.splice(0,days.length,...savedDays);
-};
 const INTERVAL=[0,0,1,3,7,14];
 
 // Switch the active local progress to the selected Firebase account.
@@ -249,7 +234,7 @@ function drill(){
     if(!c){
       const m=C.filter(visible).filter(mastered).length;
       app.innerHTML=`<div class="done"><b>${D.hit}/${D.hit+D.miss}</b><p>${D.q.length?"Session complete. You have "+m+" cards mastered overall.":"Nothing to review right now. Come back tomorrow or pick a topic from Home."}</p><div class="acts"><button class="btn go" id="again">Back to drill</button>${D.src&&D.src.length?'<button class="btn" id="prac">Practice these anyway</button><button class="btn" id="rst">Reset these cards</button>':""}<button class="btn" id="toHome">Home</button></div></div>`;
-      $("#again").onclick=()=>{D=null;render()};$("#toHome").onclick=()=>{D=null;location.hash="home"};if($("#prac"))$("#prac").onclick=()=>startDrill(D.src);if($("#rst"))$("#rst").onclick=()=>{if(confirm("Reset progress for these "+D.src.length+" cards?")){const src=D.src;src.forEach(c=>{srs[keyOf(c)]={b:0,d:today(),t:Date.now()}});saveSrs();startDrill(src)}};return;
+      $("#again").onclick=()=>{D=null;render()};$("#toHome").onclick=()=>{D=null;location.hash="home"};if($("#prac"))$("#prac").onclick=()=>startDrill(D.src);if($("#rst"))$("#rst").onclick=()=>{if(confirm("Reset progress for these "+D.src.length+" cards?")){const src=D.src;src.forEach(c=>{const k=keyOf(c);srs[k]=Object.assign({},srs[k],{b:0,d:today(),t:Date.now()})});saveSrs();startDrill(src)}};return;
     }
     const P=`<p class="ft">${esc(c.q)}</p>`;
     const A=`${shots(c)}<p class="ft${c.kind==="zh"?" zh":""}">${esc(c.a)}</p>`;
@@ -278,7 +263,7 @@ function drill(){
   <div class="row"><button class="tg" id="rev" aria-pressed="${cfg.rev}">Answer first</button><button class="tg" id="zh" aria-pressed="${cfg.zh}">Chinese phrases</button><button class="tg" id="ac" aria-pressed="${cfg.ac}">Aircraft (FTP only)</button><button class="tg" id="jobs" aria-pressed="${cfg.jobs}">Career codes</button><button class="tg" id="rall">Reset all progress</button></div>`;
   document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{const s=b.dataset.s;if(s==="rec"){const ph=all.filter(c=>photos(c).length);if(!ph.length)return;D=null;RC={qs:shuffle(ph).slice(0,20).map(c=>buildQ(c,all,true)),i:0,hit:0,pick:null};render();return}startDrill(s==="test"?sc:s==="due"?all.filter(c=>box(c)>0):s==="weak"?all.filter(c=>box(c)===1):all,s==="due")});
   ["rev","zh","ac","jobs"].forEach(k=>$("#"+k).onclick=()=>{cfg[k]=!cfg[k];saveCfg();render()});
-  $("#rall").onclick=()=>{if(confirm("Reset all card progress?")){Object.keys(srs).forEach(k=>{srs[k]={b:0,d:today(),t:Date.now()}});saveSrs();render()}};
+  $("#rall").onclick=()=>{if(confirm("Reset all card progress?")){Object.keys(srs).forEach(k=>{srs[k]=Object.assign({},srs[k],{b:0,d:today(),t:Date.now()})});saveSrs();render()}};
 }
 
 let RS=null;
@@ -984,8 +969,15 @@ if(!["All",...terms()].includes(cfg.term)){
 
 loadJobs().then(render);
 
-window.addEventListener("auth-state-changed", () => {
-  if (location.hash === "#account") {
+window.addEventListener("auth-state-changed",()=>{
+  if(location.hash==="#account"){
     render();
   }
 });
+
+// PWA: register the service worker (HTTPS or localhost only).
+if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost")){
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+  });
+}

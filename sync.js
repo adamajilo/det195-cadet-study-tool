@@ -181,7 +181,7 @@
     // Public profile information goes into publicProfiles/{uid}.
     const pushPublicProfile = async () => {
       if (!user) return;
-
+if (window.isListed && !window.isListed()) return;
       const metrics = getMetrics();
 
       await setDoc(doc(db, "publicProfiles", user.uid), {
