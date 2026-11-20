@@ -140,11 +140,40 @@ async function adminView(){
 }
 views.admin=adminView;
 
+function zhByAnswer(){
+  const m=new Map();
+  C.forEach(c=>{if(c.kind==="zh")m.set(c.a.split("\n")[0],c)});
+  return m;
+}
+function decorateTestQuestion(){
+  if(!T||T.done||T.typed)return;
+  const q=T.qs[T.i];
+  if(!q)return;
+  const map=zhByAnswer();
+  document.querySelectorAll(".opts .ans").forEach(btn=>{
+    if(btn.querySelector(".spk"))return;
+    const card=map.get(q.opts[+btn.dataset.j]);
+    if(!card)return;
+    const p=audioFor(card);
+    if(!p)return;
+    audioExists(p).then(ok=>{
+      if(!ok||!T||T.done||T.qs[T.i]!==q||!btn.isConnected||btn.querySelector(".spk"))return;
+      const s=document.createElement("span");
+      s.className="spk";s.setAttribute("role","button");s.tabIndex=0;
+      s.setAttribute("aria-label","Listen");s.title=p;s.innerHTML=SPK;
+      const play=e=>{e.stopPropagation();e.preventDefault();AUD.src=p;AUD.currentTime=0;AUD.play().catch(()=>toast("Could not play the audio"))};
+      s.onclick=play;
+      s.onkeydown=e=>{if(e.key==="Enter"||e.key===" ")play(e)};
+      btn.appendChild(s);
+    });
+  });
+}
+
 function decorate(){
   const r=location.hash.slice(1)||"home";
   if(r==="home")decorateHome();
   else if(r==="drill")decorateDrill();
-  else if(r==="test")decorateTest();
+  else if(r==="test"){decorateTest();decorateTestQuestion()}
 }
 (function(){
   const app=$("#app");

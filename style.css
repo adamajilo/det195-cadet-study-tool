@@ -634,6 +634,10 @@ main {
 .daily{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 18px;margin:14px 0}
 .daily .kick{margin:0;font:700 .75rem var(--d);letter-spacing:.08em;color:var(--muted)}
 .daily b{display:block;font-size:1.1rem}
+
+
+.spk{flex:none;width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;background:var(--card);cursor:pointer}
+.spk svg{width:18px;height:18px}
 .back {
     transform: rotateY(180deg);
 }
@@ -842,6 +846,7 @@ tr:last-child td {
 }
 
 .ans {
+    display:flex;
     text-align: left;
     font: 600 1rem var(--b);
     background: var(--card);
@@ -851,6 +856,9 @@ tr:last-child td {
     border-radius: 12px;
     padding: 13px 15px;
     white-space: pre-line;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
 }
 
 .ans:hover {
