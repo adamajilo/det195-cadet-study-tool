@@ -47,6 +47,7 @@ function lvStop(){
 }
 function lvReset(){
   lvStop();
+  localStorage.removeItem("lv_last");
   Object.assign(LV,{mode:"menu",code:"",deck:[],idx:-1,game:null,players:[],answered:0,uid:null,timerQ:-1,choice:null,lastQ:-1,revealing:false,report:null});
 }
 const lvRanked=()=>LV.players.slice().sort((a,b)=>(b.score||0)-(a.score||0));
@@ -108,11 +109,12 @@ function lvReportHtml(rep){
 function lvMenu(){
   const app=$("#app");
   const saved=localStorage.getItem("lv_name")||"";
+  const last=localStorage.getItem("lv_last")||"";
   app.innerHTML=`<h2 class="h">Live quiz</h2><p class="sub">Join a game your host started, or host one for your flight.</p>
   <div class="qcard lv-box"><h3 class="lv-h">Join a game</h3>
     <input class="ti" id="lv-code" inputmode="numeric" maxlength="6" placeholder="6-digit code" aria-label="Game code">
     <input class="ti" id="lv-name" maxlength="20" placeholder="Your nickname" aria-label="Nickname" value="${esc(saved)}">
-    <div class="acts"><button class="btn go" id="lv-join">Join</button></div>
+    <div class="acts"><button class="btn go" id="lv-join">Join</button>${last?`<button class="btn" id="lv-rejoin">Rejoin game ${esc(last)}</button>`:""}</div>
   </div>
   <div id="lv-hostbox"></div>`;
   $("#lv-join").onclick=()=>{
@@ -120,6 +122,11 @@ function lvMenu(){
     if(!/^\d{6}$/.test(code)){toast("Enter the 6-digit code");return}
     if(!name){toast("Choose a nickname");return}
     lvJoinGame(code,name);
+  };
+  if(last)$("#lv-rejoin").onclick=()=>{
+    const name=$("#lv-name").value.trim();
+    if(!name){toast("Choose a nickname");return}
+    lvJoinGame(last,name);
   };
   const box=document.getElementById("lv-hostbox");
   const user=window.getUser?window.getUser():null;
@@ -244,7 +251,7 @@ function lvHostView(){
   }
   if(g.status==="question"){
     const q=g.current||{options:[]};
-    app.innerHTML=`<div class="row"><span class="timer" id="lv-timer">${LV.secs}</span><span class="sub" style="margin:0">Question ${g.qIndex+1} of ${g.total}</span><span class="sub" style="margin:0" id="lv-count">${LV.answered} of ${ranked.length} answered</span></div>
+    app.innerHTML=`<div class="row"><span class="timer" id="lv-timer">${LV.secs}</span><span class="sub" style="margin:0">Question ${g.qIndex+1} of ${g.total}</span><span class="sub" style="margin:0">Code <b>${esc(LV.code)}</b></span><span class="sub" style="margin:0" id="lv-count">${LV.answered} of ${ranked.length} answered</span></div>
     <div class="qcard"><p class="ft">${esc(q.text||"")}</p>${lvImgs(q.imgs)}</div>
     <div class="lv-grid">${q.options.map((o,i)=>`<div class="lv-ans" style="background:${LVC[i]}"><b>${LVL[i]}</b> ${esc(o)}</div>`).join("")}</div>
     <div class="acts" style="margin-top:14px"><button class="btn" id="lv-rev">Reveal now</button></div>`;
@@ -256,7 +263,7 @@ function lvHostView(){
     const q=g.current||{options:[]},r=g.reveal||{correct:-1,counts:[0,0,0,0]};
     const max=Math.max(1,...r.counts);
     const last=g.qIndex>=g.total-1;
-    app.innerHTML=`<div class="qcard"><p class="ft">${esc(q.text||"")}</p>${lvImgs(q.imgs)}</div>
+    app.innerHTML=`<p class="sub" style="margin:0 0 8px">Game code <b>${esc(LV.code)}</b></p><div class="qcard"><p class="ft">${esc(q.text||"")}</p>${lvImgs(q.imgs)}</div>
     <div class="lv-grid">${q.options.map((o,i)=>`<div class="lv-ans ${i===r.correct?"correct":"dim"}" style="background:${LVC[i]}"><b>${LVL[i]}</b> ${esc(o)}<div class="lv-bar"><i style="width:${r.counts[i]/max*100}%"></i></div><small>${r.counts[i]} answered</small></div>`).join("")}</div>
     ${lvTeamTable(false)}
     <h3 class="lv-h">Top scores</h3>
@@ -286,11 +293,12 @@ async function lvJoinGame(code,name){
   try{
     const uid=await window.lvJoin(code,name);
     localStorage.setItem("lv_name",name);
+    localStorage.setItem("lv_last",code);
     Object.assign(LV,{mode:"play",code,uid,name,game:null,players:[],lastQ:-1,choice:null,timerQ:-1});
     LV.unsub.push(window.lvWatchGame(code,g=>{LV.game=g;if(location.hash==="#live"&&LV.mode==="play")views.live()},"player"));
     LV.unsub.push(window.lvWatchPlayers(code,p=>{LV.players=p;if(location.hash==="#live"&&LV.mode==="play"&&LV.game&&LV.game.status!=="question")views.live()},"player"));
     views.live();
-  }catch(e){console.error(e);toast("Could not join that game")}
+  }catch(e){console.error(e);if(e&&e.message==="Game not found")localStorage.removeItem("lv_last");toast("Could not join that game")}
 }
 function lvPlayerView(){
   const app=$("#app"),g=LV.game;
