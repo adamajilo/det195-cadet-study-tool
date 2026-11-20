@@ -625,6 +625,15 @@ main {
     transition: transform .45s;
 }
 
+[hidden]{display:none!important}
+.modal{position:fixed;inset:0;background:rgba(15,27,45,.6);display:grid;place-items:center;z-index:50;padding:16px}
+.modal-card{background:var(--card);border-radius:14px;padding:18px;max-width:420px;width:100%}
+.ti{width:100%;box-sizing:border-box;margin-top:10px;border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit}
+
+.speak{position:absolute;top:10px;right:10px;background:var(--card);border:1px solid var(--line);border-radius:50%;width:40px;height:40px;display:grid;place-items:center;cursor:pointer}
+.daily{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 18px;margin:14px 0}
+.daily .kick{margin:0;font:700 .75rem var(--d);letter-spacing:.08em;color:var(--muted)}
+.daily b{display:block;font-size:1.1rem}
 .back {
     transform: rotateY(180deg);
 }

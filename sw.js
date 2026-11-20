@@ -1,5 +1,5 @@
 const CACHE="briefing-room-v2";
-const CORE=["./","index.html","style.css","app.js","data.js","songs.js","sync.js","board.js","board-sync.js", "live.js", "live-sync.js", "firebase-config.js","manifest.webmanifest","icon-192.png","afsc.txt"];
+const CORE=["./","index.html","style.css","app.js","data.js","songs.js","sync.js","board.js","board-sync.js","extras.js", "extras-sync.js","live.js", "live-sync.js", "firebase-config.js","manifest.webmanifest","icon-192.png","afsc.txt"];
 
 self.addEventListener("install",e=>{
   e.waitUntil(
@@ -20,6 +20,7 @@ self.addEventListener("activate",e=>{
 self.addEventListener("fetch",e=>{
   const r=e.request;
   if(r.method!=="GET")return;
+  if(r.headers.has("range")||r.url.endsWith(".mp3"))return;
   if(new URL(r.url).origin!==location.origin)return;
   e.respondWith(
     fetch(r)

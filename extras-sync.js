@@ -15,15 +15,10 @@
     const hashOf=s=>{let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))>>>0;return h.toString(36)};
 
     const context=async()=>{
-      const u=hAuth.currentUser;
-      if(u&&!u.isAnonymous)return{db:hDb,uid:u.uid};
-      let a;
-      try{a=getApp("live")}catch(e){throw new Error("Sign in to report")}
-      const auth=getAuth(a);
-      if(!auth.currentUser)await signInAnonymously(auth);
-      return{db:getFirestore(a),uid:auth.currentUser.uid};
-    };
-
+  const u=hAuth.currentUser;
+  if(!u||u.isAnonymous)throw new Error("Sign in to report");
+  return{db:hDb,uid:u.uid};
+};
     window.rpSubmit=async r=>{
       const {db,uid}=await context();
       try{
