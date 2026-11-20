@@ -160,7 +160,7 @@ function decorateTestQuestion(){
       if(!ok||!T||T.done||T.qs[T.i]!==q||!btn.isConnected||btn.querySelector(".spk"))return;
       const s=document.createElement("span");
       s.className="spk";s.setAttribute("role","button");s.tabIndex=0;
-      s.setAttribute("aria-label","Listen");s.title=p;s.innerHTML=SPK;
+      s.setAttribute("aria-label","Listen");s.innerHTML=SPK;
       const play=e=>{e.stopPropagation();e.preventDefault();AUD.src=p;AUD.currentTime=0;AUD.play().catch(()=>toast("Could not play the audio"))};
       s.onclick=play;
       s.onkeydown=e=>{if(e.key==="Enter"||e.key===" ")play(e)};
