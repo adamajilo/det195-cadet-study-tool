@@ -861,6 +861,7 @@ tr:last-child td {
     gap:10px;
 }
 
+
 .ans:hover {
     border-color: var(--accent);
 }
@@ -1254,3 +1255,5 @@ tr:last-child td {
 .lv-bar{height:8px;background:rgba(0,0,0,.3);border-radius:4px;margin-top:10px;overflow:hidden}
 .lv-bar i{display:block;height:100%;background:#fff}
 @media (max-width:480px){.lv-grid{grid-template-columns:1fr}.lv-code{font-size:3rem}}
+
+#fl-table tr.me td{background:rgba(255,90,54,.12)}

@@ -192,7 +192,8 @@ if (window.isListed && !window.isListed()) return;
         totalXp: metrics.totalXp,
         weekly: {
           weekId: metrics.weekId,
-          xp: metrics.weeklyXp
+          xp: metrics.weeklyXp,
+                  ...(window.flightFields ? window.flightFields() : {}),
         },
         updated: Date.now()
       }, { merge: true });
