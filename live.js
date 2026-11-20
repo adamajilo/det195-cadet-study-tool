@@ -1,6 +1,6 @@
 const LVC=["#d1403a","#2f6fd1","#d99a12","#1f9d6b"];
 const LVL=["A","B","C","D"];
-const LV={mode:"menu",code:"",deck:[],idx:-1,secs:15,game:null,players:[],answered:0,uid:null,unsub:[],unsubA:null,tm:null,timerQ:-1,choice:null,lastQ:-1,revealing:false,name:"",report:null};
+const LV={mode:"menu",code:"",deck:[],idx:-1,secs:15,game:null,players:[],answered:0,uid:null,unsub:[],unsubA:null,tm:null,timerQ:-1,choice:null,lastQ:-1,revealing:false,name:"",report:null,poll:null};
 const LVT=typeof trophy==="function"?trophy:()=>"";
 const LVTEAMS=["Raptors","Falcons","Eagles","Hawks","Vipers","Talons"];
 const lvValidTeam=(p,n)=>Number.isInteger(p.team)&&p.team>=0&&p.team<n;
@@ -44,6 +44,7 @@ function lvStop(){
   LV.unsub.forEach(f=>{try{f()}catch(e){}});LV.unsub=[];
   if(LV.unsubA){try{LV.unsubA()}catch(e){}LV.unsubA=null}
   clearInterval(LV.tm);
+  clearInterval(LV.poll);LV.poll=null;
 }
 function lvReset(){
   lvStop();
@@ -289,6 +290,23 @@ function lvHostView(){
   $("#lv-del").onclick=lvEnd;
 }
 
+// Safety net for players: phones can silently drop the live connection, which
+// leaves them stuck on the last screen. Check the game directly every few seconds
+// and whenever the page comes back to the front, and only ever move forward.
+const lvProg=g=>g?((typeof g.qIndex==="number"?g.qIndex:-1)+1)*4+({lobby:0,question:1,reveal:2,done:3}[g.status]||0):-1;
+async function lvPoll(){
+  if(LV.mode!=="play"||document.hidden||!window.lvPeekGame)return;
+  try{
+    const g=await window.lvPeekGame(LV.code);
+    if(LV.mode!=="play")return;
+    if(g&&lvProg(g)<=lvProg(LV.game))return;
+    if(!g&&!LV.game)return;
+    LV.game=g;
+    if(g&&window.lvPeekPlayers){try{LV.players=await window.lvPeekPlayers(LV.code)}catch(e){}}
+    if(location.hash==="#live"&&LV.mode==="play")views.live();
+  }catch(e){}
+}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)lvPoll()});
 async function lvJoinGame(code,name){
   try{
     const uid=await window.lvJoin(code,name);
@@ -297,6 +315,7 @@ async function lvJoinGame(code,name){
     Object.assign(LV,{mode:"play",code,uid,name,game:null,players:[],lastQ:-1,choice:null,timerQ:-1});
     LV.unsub.push(window.lvWatchGame(code,g=>{LV.game=g;if(location.hash==="#live"&&LV.mode==="play")views.live()},"player"));
     LV.unsub.push(window.lvWatchPlayers(code,p=>{LV.players=p;if(location.hash==="#live"&&LV.mode==="play"&&LV.game&&LV.game.status!=="question")views.live()},"player"));
+    clearInterval(LV.poll);LV.poll=setInterval(lvPoll,5000);
     views.live();
   }catch(e){console.error(e);if(e&&e.message==="Game not found")localStorage.removeItem("lv_last");toast("Could not join that game")}
 }

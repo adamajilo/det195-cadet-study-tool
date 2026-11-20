@@ -3,7 +3,7 @@
   if(!fb||!fb.apiKey||String(fb.apiKey).startsWith("YOUR"))return;
   try{
     const V="10.12.2",base="https://www.gstatic.com/firebasejs/"+V+"/";
-    const [{getApp,initializeApp},{getAuth,signInAnonymously},{getFirestore,doc,getDoc,setDoc,updateDoc,deleteDoc,deleteField,collection,getDocs,query,where,onSnapshot,writeBatch,serverTimestamp}]=await Promise.all([
+    const [{getApp,initializeApp},{getAuth,signInAnonymously},{getFirestore,initializeFirestore,doc,getDoc,setDoc,updateDoc,deleteDoc,deleteField,collection,getDocs,query,where,onSnapshot,writeBatch,serverTimestamp}]=await Promise.all([
       import(base+"firebase-app.js"),
       import(base+"firebase-auth.js"),
       import(base+"firebase-firestore.js")
@@ -16,7 +16,11 @@
     const STREAK_STEP=100,STREAK_MAX=5;
 
     const hApp=getApp(),hAuth=getAuth(hApp),hDb=getFirestore(hApp);
-    const pApp=initializeApp(fb,"live"),pAuth=getAuth(pApp),pDb=getFirestore(pApp);
+    const pApp=initializeApp(fb,"live"),pAuth=getAuth(pApp);
+    // Players use long polling when a network blocks the normal live connection.
+    let pDb;
+    try{pDb=initializeFirestore(pApp,{experimentalAutoDetectLongPolling:true})}
+    catch(e){pDb=getFirestore(pApp)}
     const gref=(db,code)=>doc(db,"games",code);
     const dbFor=r=>r==="host"?hDb:pDb;
 
@@ -107,6 +111,9 @@
     window.lvWatchGame=(code,cb,role)=>onSnapshot(gref(dbFor(role),code),s=>cb(s.exists()?s.data():null),e=>console.warn("Game watch",e));
     window.lvWatchPlayers=(code,cb,role)=>onSnapshot(collection(dbFor(role),"games",code,"players"),s=>cb(s.docs.map(d=>({id:d.id,...d.data()}))),e=>console.warn("Players watch",e));
     window.lvWatchAnswers=(code,idx,cb)=>onSnapshot(query(collection(hDb,"games",code,"answers"),where("q","==",idx)),s=>cb(s.size),e=>console.warn("Answers watch",e));
+
+    window.lvPeekGame=async code=>{const s=await getDoc(gref(pDb,code));return s.exists()?s.data():null};
+    window.lvPeekPlayers=async code=>(await getDocs(collection(pDb,"games",code,"players"))).docs.map(d=>({id:d.id,...d.data()}));
 
     window.lvJoin=async(code,name)=>{
       if(!pAuth.currentUser)await signInAnonymously(pAuth);
