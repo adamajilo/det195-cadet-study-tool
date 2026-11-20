@@ -11,6 +11,10 @@
     const wait=f=>new Promise(r=>{const t=setInterval(()=>{let v=false;try{v=f()}catch(e){}if(v){clearInterval(t);r(v)}},200)});
     await wait(()=>getApp());
 
+    // Streak bonus: from the 2nd correct answer in a row, add STREAK_STEP points
+    // per extra answer in the streak, up to STREAK_MAX steps.
+    const STREAK_STEP=100,STREAK_MAX=5;
+
     const hApp=getApp(),hAuth=getAuth(hApp),hDb=getFirestore(hApp);
     const pApp=initializeApp(fb,"live"),pAuth=getAuth(pApp),pDb=getFirestore(pApp);
     const gref=(db,code)=>doc(db,"games",code);
@@ -22,7 +26,7 @@
       try{return (await getDoc(doc(hDb,"hosts",u.uid))).exists()}catch(e){return false}
     };
 
-    window.lvCreate=async({name,deck,secs})=>{
+    window.lvCreate=async({name,deck,secs,teams})=>{
       const u=hAuth.currentUser;
       if(!u)throw new Error("Sign in first");
       let code=null;
@@ -31,7 +35,7 @@
         if(!(await getDoc(gref(hDb,c))).exists())code=c;
       }
       if(!code)throw new Error("No free code");
-      await setDoc(gref(hDb,code),{hostUid:u.uid,name:name||"Live quiz",status:"lobby",qIndex:-1,total:deck.length,secs,created:serverTimestamp()});
+      await setDoc(gref(hDb,code),{hostUid:u.uid,name:name||"Live quiz",status:"lobby",qIndex:-1,total:deck.length,secs,teams:teams||[],created:serverTimestamp()});
       await setDoc(doc(hDb,"games",code,"private","key"),{deck:JSON.stringify(deck)});
       return code;
     };
@@ -63,9 +67,31 @@
       });
       const players=await getDocs(collection(hDb,"games",code,"players"));
       const batch=writeBatch(hDb);
-      players.forEach(p=>{const g=gains[p.id]||0;batch.update(p.ref,{score:(p.data().score||0)+g,last:g})});
+      const tn=gs.data().teams||[];
+      const cnt=tn.map(()=>0);
+      const okTeam=t=>Number.isInteger(t)&&t>=0&&t<tn.length;
+      players.forEach(p=>{const t=p.data().team;if(okTeam(t))cnt[t]++});
+      players.forEach(p=>{
+        const d=p.data(),g=gains[p.id]||0;
+        const streak=g>0?(d.streak||0)+1:0;
+        const bonus=streak>=2?Math.min(streak-1,STREAK_MAX)*STREAK_STEP:0;
+        const upd={score:(d.score||0)+g+bonus,last:g+bonus,streak,bonus};
+        if(tn.length&&!okTeam(d.team)){
+          let m=0;cnt.forEach((c,i)=>{if(c<cnt[m])m=i});
+          cnt[m]++;upd.team=m;
+        }
+        batch.update(p.ref,upd);
+      });
       batch.update(gref(hDb,code),{status:"reveal",reveal:{correct,counts}});
       await batch.commit();
+    };
+
+    window.lvLoadAnswers=async code=>(await getDocs(collection(hDb,"games",code,"answers"))).docs.map(d=>d.data());
+
+    window.lvSetTeams=async(code,map)=>{
+      const b=writeBatch(hDb);
+      Object.keys(map).forEach(uid=>b.update(doc(hDb,"games",code,"players",uid),{team:map[uid]}));
+      await b.commit();
     };
 
     window.lvFinish=code=>updateDoc(gref(hDb,code),{status:"done"});

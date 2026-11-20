@@ -1257,3 +1257,5 @@ tr:last-child td {
 @media (max-width:480px){.lv-grid{grid-template-columns:1fr}.lv-code{font-size:3rem}}
 
 #fl-table tr.me td{background:rgba(255,90,54,.12)}
+
+.lv-chip{display:inline-flex;gap:2px}

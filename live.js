@@ -1,7 +1,44 @@
 const LVC=["#d1403a","#2f6fd1","#d99a12","#1f9d6b"];
 const LVL=["A","B","C","D"];
-const LV={mode:"menu",code:"",deck:[],idx:-1,secs:15,game:null,players:[],answered:0,uid:null,unsub:[],unsubA:null,tm:null,timerQ:-1,choice:null,lastQ:-1,revealing:false,name:""};
+const LV={mode:"menu",code:"",deck:[],idx:-1,secs:15,game:null,players:[],answered:0,uid:null,unsub:[],unsubA:null,tm:null,timerQ:-1,choice:null,lastQ:-1,revealing:false,name:"",report:null};
 const LVT=typeof trophy==="function"?trophy:()=>"";
+const LVTEAMS=["Raptors","Falcons","Eagles","Hawks","Vipers","Talons"];
+const lvValidTeam=(p,n)=>Number.isInteger(p.team)&&p.team>=0&&p.team<n;
+function lvTeamStandings(){
+  const names=(LV.game&&LV.game.teams)||[];
+  const t=names.map((name,i)=>({i,name,n:0,sum:0}));
+  LV.players.forEach(p=>{if(lvValidTeam(p,t.length)){t[p.team].n++;t[p.team].sum+=p.score||0}});
+  t.forEach(x=>{x.avg=x.n?Math.round(x.sum/x.n):0});
+  return t.sort((a,b)=>b.avg-a.avg||b.n-a.n);
+}
+function lvTeamTable(final){
+  const t=lvTeamStandings();
+  if(!t.length)return"";
+  const kinds=["gold","silver","bronze"];
+  return`<h3 class="lv-h">Teams</h3><div class="tw"><table><tbody>${t.map((x,i)=>`<tr><td>${final&&i<3?LVT(kinds[i],24):"#"+(i+1)}</td><td>${esc(x.name)}</td><td>${x.avg}</td><td>${x.n} player${x.n===1?"":"s"}</td></tr>`).join("")}</tbody></table></div><p class="sub">Team score is the average points per player, so team size does not matter.</p>`;
+}
+function lvMyTeam(me){
+  const names=(LV.game&&LV.game.teams)||[];
+  if(!me||!lvValidTeam(me,names.length))return null;
+  return{name:names[me.team],place:lvTeamStandings().findIndex(t=>t.i===me.team)+1};
+}
+async function lvAssign(all){
+  const names=(LV.game&&LV.game.teams)||[];
+  if(!names.length)return;
+  const map={};
+  if(all){
+    shuffle(LV.players).forEach((p,i)=>{map[p.id]=i%names.length});
+  }else{
+    const cnt=names.map(()=>0);
+    LV.players.forEach(p=>{if(lvValidTeam(p,names.length))cnt[p.team]++});
+    shuffle(LV.players.filter(p=>!lvValidTeam(p,names.length))).forEach(p=>{
+      let m=0;cnt.forEach((c,i)=>{if(c<cnt[m])m=i});
+      map[p.id]=m;cnt[m]++;
+    });
+  }
+  if(!Object.keys(map).length)return;
+  try{await window.lvSetTeams(LV.code,map)}catch(e){console.error(e);toast("Could not set the teams")}
+}
 
 function lvStop(){
   LV.unsub.forEach(f=>{try{f()}catch(e){}});LV.unsub=[];
@@ -10,7 +47,7 @@ function lvStop(){
 }
 function lvReset(){
   lvStop();
-  Object.assign(LV,{mode:"menu",code:"",deck:[],idx:-1,game:null,players:[],answered:0,uid:null,timerQ:-1,choice:null,lastQ:-1,revealing:false});
+  Object.assign(LV,{mode:"menu",code:"",deck:[],idx:-1,game:null,players:[],answered:0,uid:null,timerQ:-1,choice:null,lastQ:-1,revealing:false,report:null});
 }
 const lvRanked=()=>LV.players.slice().sort((a,b)=>(b.score||0)-(a.score||0));
 const lvImgs=a=>a&&a.length?`<div class="shots">${a.map(s=>`<figure class="shot"><img class="pic" src="${esc(s)}" alt=""></figure>`).join("")}</div>`:"";
@@ -29,8 +66,43 @@ function lvBuildDeck(cards,n){
   const pool=C.filter(baseVis);
   return shuffle(cards).slice(0,n).map(c=>{
     const q=buildQ(c,pool,Math.random()<.4);
-    return{text:q.img?"Who or what is this?":q.c.q,options:q.opts,correct:q.opts.indexOf(q.right),imgs:q.img?photos(q.c).map(p=>p[0]):[]};
+    return{text:q.img?"Who or what is this?":q.c.q,options:q.opts,correct:q.opts.indexOf(q.right),imgs:q.img?photos(q.c).map(p=>p[0]):[],g:q.c.g||""};
   }).filter(q=>q.options.length>=2&&q.correct>=0);
+}
+
+function lvMakeReport(ans){
+  const n=Math.max(1,LV.players.length);
+  const by=LV.deck.map(()=>({counts:[0,0,0,0],total:0}));
+  ans.forEach(a=>{
+    const r=by[a.q];
+    if(!r)return;
+    r.total++;
+    if(a.choice>=0&&a.choice<4)r.counts[a.choice]++;
+  });
+  const rows=LV.deck.map((q,i)=>{
+    const r=by[i],den=Math.max(n,r.total),right=r.counts[q.correct]||0;
+    let wi=-1;
+    r.counts.forEach((c,j)=>{if(j!==q.correct&&c>0&&(wi<0||c>r.counts[wi]))wi=j});
+    return{i,text:q.text,g:q.g||"",right,den,pct:Math.round(right/den*100),ans:q.options[q.correct]||"",wrong:wi<0?"":q.options[wi],wrongN:wi<0?0:r.counts[wi]};
+  });
+  const topics={};
+  rows.forEach(r=>{
+    if(!r.g)return;
+    const t=topics[r.g]=topics[r.g]||{g:r.g,right:0,den:0};
+    t.right+=r.right;t.den+=r.den;
+  });
+  Object.values(topics).forEach(t=>{t.pct=t.den?Math.round(t.right/t.den*100):0});
+  return{rows,topics:Object.values(topics)};
+}
+function lvReportHtml(rep){
+  const miss=rep.rows.slice().sort((a,b)=>a.pct-b.pct||a.i-b.i).filter(r=>r.pct<100).slice(0,5);
+  const missed=miss.length
+    ?`<div class="tw"><table><thead><tr><th>Q</th><th>QUESTION</th><th>ANSWER</th><th>CORRECT</th><th>MOST COMMON WRONG</th></tr></thead><tbody>${miss.map(r=>`<tr><td>${r.i+1}</td><td>${esc(r.text)}</td><td>${esc(r.ans)}</td><td><b>${r.pct}%</b></td><td>${r.wrong?esc(r.wrong)+" ("+r.wrongN+")":"No answer"}</td></tr>`).join("")}</tbody></table></div>`
+    :'<p class="note">Everyone got every question right.</p>';
+  const topics=rep.topics.length
+    ?`<h3 class="lv-h">By topic</h3><div class="tw"><table><tbody>${rep.topics.slice().sort((a,b)=>a.pct-b.pct).map(t=>`<tr><td>${esc(t.g)}</td><td>${t.pct}% correct</td></tr>`).join("")}</tbody></table></div>`
+    :"";
+  return`<h3 class="lv-h">Review these first</h3>${missed}${topics}`;
 }
 
 function lvMenu(){
@@ -74,26 +146,27 @@ function lvSetup(){
     <label>Cards<select class="ti" id="lv-set">${sets.map((s,i)=>`<option value="${i}">${esc(s[0])} (${s[1].length} cards)</option>`).join("")}</select></label>
     <label>Questions<select class="ti" id="lv-n"><option>10</option><option selected>15</option><option>20</option></select></label>
     <label>Seconds per question<select class="ti" id="lv-secs"><option>10</option><option selected>15</option><option>20</option><option>30</option></select></label>
+    <label>Teams<select class="ti" id="lv-teams"><option value="0" selected>Off, everyone plays alone</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label>
     <div class="acts"><button class="btn go" id="lv-make">Create game</button><button class="btn" id="lv-back">Back</button></div>
   </div>`;
   $("#lv-back").onclick=()=>{LV.mode="menu";views.live()};
-  $("#lv-make").onclick=()=>lvHostStart(sets[+$("#lv-set").value][1],+$("#lv-n").value,+$("#lv-secs").value,$("#lv-gname").value.trim());
+  $("#lv-make").onclick=()=>lvHostStart(sets[+$("#lv-set").value][1],+$("#lv-n").value,+$("#lv-secs").value,$("#lv-gname").value.trim(),+$("#lv-teams").value);
 }
 
-async function lvHostStart(cards,n,secs,name){
+async function lvHostStart(cards,n,secs,name,teamCount){
   const deck=lvBuildDeck(cards,n);
   if(deck.length<3){toast("Not enough cards for a game");return}
   try{
-    const code=await window.lvCreate({name,deck,secs});
+    const code=await window.lvCreate({name,deck,secs,teams:LVTEAMS.slice(0,teamCount||0)});
     localStorage.setItem("lv_host",code);
-    Object.assign(LV,{mode:"host",code,deck,secs,idx:-1,game:null,players:[],timerQ:-1});
+    Object.assign(LV,{mode:"host",code,deck,secs,idx:-1,game:null,players:[],timerQ:-1,report:null});
     lvWatchHost();views.live();
   }catch(e){console.error(e);toast("Could not create the game")}
 }
 async function lvResume(code){
   try{
     const deck=await window.lvLoadDeck(code);
-    Object.assign(LV,{mode:"host",code,deck,game:null,players:[],timerQ:-1});
+    Object.assign(LV,{mode:"host",code,deck,game:null,players:[],timerQ:-1,report:null});
     lvWatchHost();views.live();
   }catch(e){console.error(e);localStorage.removeItem("lv_host");toast("That game is no longer available");views.live()}
 }
@@ -141,13 +214,31 @@ function lvHostView(){
   if(!g){app.innerHTML='<p class="note">Loading game...</p>';return}
   const ranked=lvRanked();
   if(g.status==="lobby"){
+    const tn=g.teams||[];
+    const byName=LV.players.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+    const chip=p=>tn.length
+      ?`<span class="lv-chip"><button class="tg" data-move="${esc(p.id)}" title="Move to the next team">${esc(p.name)}</button><button class="tg" data-kick="${esc(p.id)}" title="Remove player" aria-label="Remove ${esc(p.name)}">×</button></span>`
+      :`<button class="tg" data-kick="${esc(p.id)}" title="Remove player">${esc(p.name)} ×</button>`;
+    const loose=byName.filter(p=>!lvValidTeam(p,tn.length));
+    const lobbyPlayers=tn.length
+      ?tn.map((n,i)=>{const l=byName.filter(p=>lvValidTeam(p,tn.length)&&p.team===i);return`<div class="week-card"><b>${esc(n)}</b> <span class="sub">${l.length} player${l.length===1?"":"s"}</span><div class="chips" style="margin-top:8px">${l.map(chip).join("")||'<span class="sub">Empty</span>'}</div></div>`}).join("")
+        +(loose.length?`<div class="week-card"><b>Not on a team yet</b><div class="chips" style="margin-top:8px">${loose.map(chip).join("")}</div></div>`:"")
+      :`<div class="chips">${byName.map(chip).join("")||'<span class="sub">Waiting for players...</span>'}</div>`;
     app.innerHTML=`<h2 class="h">${esc(g.name||"Live quiz")}</h2><p class="sub">Players open this site, choose Live, and enter the code.</p>
     <div class="lv-code">${esc(LV.code)}</div>
     <h3 class="lv-h">${ranked.length} in the lobby</h3>
-    <div class="chips">${ranked.map(p=>`<button class="tg" data-kick="${esc(p.id)}" title="Remove player">${esc(p.name)} ×</button>`).join("")||'<span class="sub">Waiting for players...</span>'}</div>
-    <div class="acts" style="margin-top:18px"><button class="btn go" id="lv-start" ${ranked.length?"":"disabled"}>Start game</button><button class="btn" id="lv-end">Cancel game</button></div>`;
+    ${lobbyPlayers}
+    ${tn.length?'<p class="sub" style="margin-top:10px">Tap a name to move that player to the next team.</p>':""}
+    <div class="acts" style="margin-top:18px"><button class="btn go" id="lv-start" ${ranked.length?"":"disabled"}>Start game</button>${tn.length?'<button class="btn" id="lv-shuf" '+(ranked.length?"":"disabled")+'>Shuffle teams</button>':""}<button class="btn" id="lv-end">Cancel game</button></div>`;
     document.querySelectorAll("[data-kick]").forEach(b=>b.onclick=()=>window.lvKick(LV.code,b.dataset.kick));
-    $("#lv-start").onclick=()=>lvOpen(0);
+    document.querySelectorAll("[data-move]").forEach(b=>b.onclick=()=>{
+      const p=LV.players.find(x=>x.id===b.dataset.move);
+      if(!p)return;
+      const cur=lvValidTeam(p,tn.length)?p.team:-1;
+      window.lvSetTeams(LV.code,{[p.id]:(cur+1)%tn.length}).catch(e=>{console.error(e);toast("Could not move the player")});
+    });
+    if($("#lv-shuf"))$("#lv-shuf").onclick=()=>lvAssign(true);
+    $("#lv-start").onclick=async()=>{await lvAssign(false);lvOpen(0)};
     $("#lv-end").onclick=lvEnd;
     return;
   }
@@ -167,15 +258,26 @@ function lvHostView(){
     const last=g.qIndex>=g.total-1;
     app.innerHTML=`<div class="qcard"><p class="ft">${esc(q.text||"")}</p>${lvImgs(q.imgs)}</div>
     <div class="lv-grid">${q.options.map((o,i)=>`<div class="lv-ans ${i===r.correct?"correct":"dim"}" style="background:${LVC[i]}"><b>${LVL[i]}</b> ${esc(o)}<div class="lv-bar"><i style="width:${r.counts[i]/max*100}%"></i></div><small>${r.counts[i]} answered</small></div>`).join("")}</div>
+    ${lvTeamTable(false)}
     <h3 class="lv-h">Top scores</h3>
-    <div class="tw"><table><tbody>${ranked.slice(0,5).map((p,i)=>`<tr><td>#${i+1}</td><td>${esc(p.name)}</td><td>${p.score||0}</td><td>${p.last?"+"+p.last:""}</td></tr>`).join("")}</tbody></table></div>
+    <div class="tw"><table><tbody>${ranked.slice(0,5).map((p,i)=>`<tr><td>#${i+1}</td><td>${esc(p.name)}</td><td>${p.score||0}</td><td>${p.last?"+"+p.last:""}</td><td>${p.streak>=2?p.streak+" in a row":""}</td></tr>`).join("")}</tbody></table></div>
     <div class="acts" style="margin-top:14px"><button class="btn go" id="lv-next">${last?"Finish game":"Next question"}</button></div>`;
     $("#lv-next").onclick=()=>last?window.lvFinish(LV.code):lvOpen(g.qIndex+1);
     return;
   }
   const kinds=["gold","silver","bronze"];
+  if(!LV.report&&window.lvLoadAnswers){
+    LV.report="loading";
+    const again=()=>{if(location.hash==="#live"&&LV.mode==="host")views.live()};
+    window.lvLoadAnswers(LV.code).then(a=>{LV.report=lvMakeReport(a);again()}).catch(e=>{console.error("Report failed",e);LV.report="error";again()});
+  }
+  const rep=LV.report;
+  const repHtml=!rep||rep==="loading"?'<p class="note">Building the report...</p>':rep==="error"?'<p class="note">Could not load the report.</p>':lvReportHtml(rep);
+  const hasTeams=!!(g.teams&&g.teams.length);
   app.innerHTML=`<h2 class="h">Final results</h2>
+  ${lvTeamTable(true)}${hasTeams?'<h3 class="lv-h">Players</h3>':""}
   <div class="tw"><table><tbody>${ranked.map((p,i)=>`<tr><td>${i<3?LVT(kinds[i],24):"#"+(i+1)}</td><td>${esc(p.name)}</td><td>${p.score||0}</td></tr>`).join("")}</tbody></table></div>
+  ${repHtml}
   <div class="acts" style="margin-top:18px"><button class="btn" id="lv-del">Delete game</button></div>`;
   $("#lv-del").onclick=lvEnd;
 }
@@ -194,8 +296,10 @@ function lvPlayerView(){
   const app=$("#app"),g=LV.game;
   if(!g){app.innerHTML='<p class="note">This game has ended.</p><div class="acts"><button class="btn" id="lv-leave">Back</button></div>';$("#lv-leave").onclick=()=>{lvReset();views.live()};return}
   const ranked=lvRanked(),me=LV.players.find(p=>p.id===LV.uid),place=ranked.findIndex(p=>p.id===LV.uid)+1;
+  const team=lvMyTeam(me);
+  const teamLine=team?`<p class="sub" style="margin-top:10px">${esc(team.name)} is in place #${team.place}.</p>`:"";
   if(g.status==="lobby"){
-    app.innerHTML=`<h2 class="h">You are in</h2><p class="sub">${esc(LV.name)}, wait for the host to start. ${ranked.length} player${ranked.length===1?"":"s"} so far.</p>`;
+    app.innerHTML=`<h2 class="h">You are in</h2><p class="sub">${esc(LV.name)}, wait for the host to start. ${ranked.length} player${ranked.length===1?"":"s"} so far.${team?" You are on <b>"+esc(team.name)+"</b>.":""}</p>`;
     return;
   }
   if(g.status==="question"){
@@ -215,12 +319,13 @@ function lvPlayerView(){
   }
   if(g.status==="reveal"){
     const r=g.reveal||{correct:-1},ok=LV.choice===r.correct;
-    app.innerHTML=`<div class="done"><b>${LV.choice==null?"No answer":ok?"Correct":"Not this time"}</b><p>${ok&&me?"+"+(me.last||0)+" points":"The answer was "+esc((g.current.options||[])[r.correct]||"")}</p></div>
-    <div class="stats" style="margin-top:14px"><div class="stat"><b>${me?me.score||0:0}</b><span>Score</span></div><div class="stat"><b>${place||"-"}</b><span>Place</span></div></div>`;
+    const streakNote=ok&&me&&me.bonus?" ("+me.streak+" in a row, +"+me.bonus+" bonus)":"";
+    app.innerHTML=`<div class="done"><b>${LV.choice==null?"No answer":ok?"Correct":"Not this time"}</b><p>${ok&&me?"+"+(me.last||0)+" points"+streakNote:"The answer was "+esc((g.current.options||[])[r.correct]||"")}</p></div>
+    <div class="stats" style="margin-top:14px"><div class="stat"><b>${me?me.score||0:0}</b><span>Score</span></div><div class="stat"><b>${place||"-"}</b><span>Place</span></div></div>${teamLine}`;
     return;
   }
   const kinds=["gold","silver","bronze"];
-  app.innerHTML=`<div class="done"><b>${place?"#"+place:"Done"}</b><p>${esc(LV.name)}, you finished with ${me?me.score||0:0} points.</p></div>
+  app.innerHTML=`<div class="done"><b>${place?"#"+place:"Done"}</b><p>${esc(LV.name)}, you finished with ${me?me.score||0:0} points.</p></div>${teamLine}
   <div class="tw" style="margin-top:14px"><table><tbody>${ranked.slice(0,5).map((p,i)=>`<tr><td>${i<3?LVT(kinds[i],24):"#"+(i+1)}</td><td>${esc(p.name)}</td><td>${p.score||0}</td></tr>`).join("")}</tbody></table></div>
   <div class="acts" style="margin-top:18px"><button class="btn" id="lv-leave">Leave</button></div>`;
   $("#lv-leave").onclick=()=>{lvReset();views.live()};

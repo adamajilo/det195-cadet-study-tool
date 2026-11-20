@@ -195,3 +195,32 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")closeModal()});
   window.addEventListener("auth-state-changed",check);
   setTimeout(check,2500);
 })();
+
+// Harder multiple-choice options.
+// Replaces buildQ so the three wrong answers look like the right one
+// (same topic and week, similar wording and length) instead of random cards.
+// Used by the Test tab, photo drill and live quiz. Delete this file to go back.
+(function(){
+  const norm=s=>String(s).toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff ]/g," ").replace(/\s+/g," ").trim();
+  const grams=s=>{const t=s.replace(/ /g,""),m=new Map();for(let i=0;i<t.length-1;i++){const b=t.slice(i,i+2);m.set(b,(m.get(b)||0)+1)}return m};
+  const dice=(a,b)=>{let ta=0,tb=0,x=0;a.forEach(v=>{ta+=v});b.forEach(v=>{tb+=v});if(!ta||!tb)return 0;a.forEach((v,k)=>{if(b.has(k))x+=Math.min(v,b.get(k))});return 2*x/(ta+tb)};
+  const first=x=>x.a.split("\n")[0];
+  const memo=new Map();
+  const info=v=>{let i=memo.get(v);if(!i){const n=norm(v);i={n,g:grams(n),w:n.split(" ").length};memo.set(v,i)}return i};
+  const ratio=(a,b)=>1-Math.min(1,Math.abs(a-b)/Math.max(a,b,1));
+  buildQ=function(c,pool,img){
+    const right=first(c),r=info(right);
+    const seen=new Set([r.n]),cands=[];
+    pool.forEach(x=>{
+      if(x===c)return;
+      const v=first(x),i=info(v);
+      if(!i.n||seen.has(i.n))return;
+      seen.add(i.n);
+      const s=0.4*dice(r.g,i.g)+0.25*ratio(r.n.length,i.n.length)+0.1*ratio(r.w,i.w)+(x.g===c.g?0.25:0)+(x.w===c.w?0.1:0)+Math.random()*0.15;
+      cands.push([s,v]);
+    });
+    cands.sort((a,b)=>b[0]-a[0]);
+    const opts=[right,...shuffle(cands.slice(0,5)).slice(0,3).map(x=>x[1])];
+    return{c,img:!!img&&photos(c).length>0,right,opts:shuffle(opts)};
+  };
+})();
