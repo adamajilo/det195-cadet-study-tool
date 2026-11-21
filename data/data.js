@@ -1,4 +1,3 @@
-
 const SCHED = [
   { w: 1, d: "2026-10-01", t: "Test 1", f: "Det Leadership, POC Ranks, Basic Responses" },
   { w: 2, d: "2026-10-08", t: "Test 2", f: "Enlisted/Officer Ranks" },
@@ -13,6 +12,7 @@ const SCHED = [
 ];
 
 const WEEKS = [1, 2, 3, 4, 6, 7, 8];
+const PHONETIC = "Alpha Bravo Charlie Delta Echo Foxtrot Golf Hotel India Juliet Kilo Lima Mike November Oscar Papa Quebec Romeo Sierra Tango Uniform Victor Whiskey X-Ray Yankee Zulu".split(" ");
 
 const C = [];
 let TERM = "Fall";
@@ -20,8 +20,6 @@ const TERM_LABEL = { Fall: "Fall 2026", Spring: "Spring 2027" };
 
 const add = (w, g, list, kind) =>
   list.forEach(([q, a]) => C.push({ w, g, q, a, kind: kind || "", term: TERM }));
-
-// WEEK 1
 
 add(1, "Det 195 Leadership", [
   ["Det 195 Commander", "Lieutenant Colonel Andrew Metelko"],
@@ -55,8 +53,6 @@ add(1, "Basic Responses", [
   ["Basic response when you didn't follow what was said", "Sir (Ma'am), I do not understand."],
   ["Basic response when you don't have the answer", "Sir (Ma'am), I do not know."]
 ]);
-
-// WEEK 2
 
 add(2, "AF Enlisted", [
   ["Air Force E-1", "Airman Basic (AB)"],
@@ -108,8 +104,6 @@ add(2, "SF Officer", [
   ["O-10", "General (Gen)"]
 ]);
 
-// WEEK 3
-
 add(3, "Missions", [
   ["Air Force Mission", "To fly, fight, and win… airpower, anytime, anywhere."],
   ["Holm Center Mission", "We build leaders."],
@@ -133,8 +127,6 @@ add(3, "Branch Roles", [
   ["US Space Force role", "Manages military operations in space and protects US interests in space."]
 ]);
 
-const PHONETIC = "Alpha Bravo Charlie Delta Echo Foxtrot Golf Hotel India Juliet Kilo Lima Mike November Oscar Papa Quebec Romeo Sierra Tango Uniform Victor Whiskey X-Ray Yankee Zulu".split(" ");
-
 add(
   3,
   "Phonetic Alphabet",
@@ -150,8 +142,6 @@ add(4, "Adversaries", [
   ["Per the 2024 Annual Estimate of the Strategic Security Environment, which adversary \"continues to dominate the strategic narrative\"?", "The People's Republic of China"],
   ["Source of the quote: China \"continues to dominate the strategic narrative\"", "The 2024 Annual Estimate of the Strategic Security Environment"]
 ]);
-
-// WEEK 6
 
 add(6, "Chain of Command", [
   ["President", "The Honorable Donald J. Trump"],
@@ -187,8 +177,6 @@ add(6, "AF History", [
   ["Two Cold War capabilities the USAF developed", "Nuclear deterrence and air superiority"]
 ]);
 
-// WEEK 7
-
 add(7, "Competencies", [
   ["Define competencies", "A combination of knowledge, skills, and abilities that manifest in patterns of behavior. Foundational competencies are universally applicable to all Airmen."],
   ["The four Foundational Competency categories", "Developing Self, Developing Others, Developing Ideas, Developing Organizations"]
@@ -206,8 +194,6 @@ add(7, "Code of Conduct", [
   ["Code of Conduct Article III", "If I am captured, I will continue to resist by all means available. I will make every effort to escape and aid others to escape. I will accept neither parole nor special favors from the enemy."]
 ]);
 
-// WEEK 8
-
 add(8, "ACE", [
   ["What is Agile Combat Employment (ACE)?", "A doctrinal strategy designed to increase the survivability and effectiveness of the USAF in highly contested environments."],
   ["The five key elements of ACE", "Disperse Operations, Rapid Mobility, Multi-Capable Airmen, Prepositioned Equipment, Command and Control Flexibility"],
@@ -220,8 +206,6 @@ add(8, "Creed", [
   ["Airman's Creed: \"My nation's sword and shield, its…\"", "sentry and avenger."],
   ["Airman's Creed: final three lines", "I will never leave an Airman behind,\nI will never falter,\nAnd I will not fail!"]
 ]);
-
-// CHINESE VOCABULARY
 
 [
   [1, [
@@ -281,8 +265,6 @@ add(8, "Creed", [
   )
 );
 
-// AIRCRAFT
-
 add(8, "Aircraft", [
   ["F-15/E/EX", "Eagle / Strike Eagle / Eagle II · Air superiority/multirole"],
   ["F-16", "Fighting Falcon · Multirole"],
@@ -315,8 +297,6 @@ add(8, "Aircraft", [
   ["RQ-4", "Global Hawk · ISR UAV"],
   ["RQ-170", "Sentinel · ISR UAV"]
 ], "ac");
-
-// RECITATION SETS
 
 const R = [
   {
@@ -431,12 +411,9 @@ const R = [
       "I am an American, fighting in the forces which guard my country and our way of life.",
       "I am prepared to give my life in their defense.",
       "#Article II",
-      "I will never surrender of my own free will.",
-      "If in command, I will never surrender the members of my command while they still have the means to resist.",
+      "I will never surrender of my own free will. If in command, I will never surrender the members of my command while they still have the means to resist.",
       "#Article III",
-      "If I am captured, I will continue to resist by all means available.",
-      "I will make every effort to escape and aid others to escape.",
-      "I will accept neither parole nor special favors from the enemy."
+      "If I am captured, I will continue to resist by all means available. I will make every effort to escape and aid others to escape. I will accept neither parole nor special favors from the enemy."
     ]
   },
   {
@@ -490,8 +467,6 @@ const R = [
   }
 ];
 
-// IMAGE MAPPINGS
-
 const IMG = {
   "Chain of Command": {
     "President": "images/nationalcoc/president.webp",
@@ -505,11 +480,9 @@ const IMG = {
     "Holm Center/CC": "images/nationalcoc/holm.webp",
     "AFROTC/CC": "images/nationalcoc/afrotc.webp"
   },
-
   "Chinese": {
-  "My name is…": "images/nato/wojiao.webp"
-},
-
+    "My name is…": "images/nato/wojiao.webp"
+  },
   "POC Ranks": {
     "POC rank #1 (lowest)": {
       uurp: "images/pocrank/uurp/uurpc-2dlt.webp",
@@ -536,7 +509,6 @@ const IMG = {
       erb: "images/pocrank/erb/erb-col.webp"
     }
   },
-
   "Phonetic Alphabet": {
     "Phonetic for A": "images/nato/alpha.webp",
     "Phonetic for B": "images/nato/bravo.webp",
@@ -565,7 +537,6 @@ const IMG = {
     "Phonetic for Y": "images/nato/yankee.webp",
     "Phonetic for Z": "images/nato/zulu.webp"
   },
-
   "AF Enlisted": {
     "Air Force E-1": "images/airforcerank/e1.webp",
     "Air Force E-2": "images/airforcerank/e2.webp",
@@ -581,7 +552,6 @@ const IMG = {
       ["images/airforcerank/e9-cmsaf.webp", "Chief Master Sergeant of the Air Force"]
     ]
   },
-
   "SF Enlisted": {
     "Space Force E-1": "images/spaceforcerank/e1.webp",
     "Space Force E-2": "images/spaceforcerank/e2.webp",
@@ -597,7 +567,6 @@ const IMG = {
       ["images/spaceforcerank/e9-seac.webp", "Senior Enlisted Advisor to the Chairman"]
     ]
   },
-
   "AF Officer": {
     "O-1": "images/airforcerank/o1.webp",
     "O-2": "images/airforcerank/o2.webp",
@@ -610,7 +579,6 @@ const IMG = {
     "O-9": "images/airforcerank/o9.webp",
     "O-10": "images/airforcerank/o10.webp"
   },
-
   "SF Officer": {
     "O-1": "images/spaceforcerank/o1.webp",
     "O-2": "images/spaceforcerank/o2.webp",
@@ -623,37 +591,36 @@ const IMG = {
     "O-9": "images/spaceforcerank/o9.webp",
     "O-10": "images/spaceforcerank/o10.webp"
   },
-
   "Aircraft": {
-  "F-15/E/EX": "images/aircraft/f-15-e-ex.webp",
-  "F-16": "images/aircraft/f-16.webp",
-  "F-22": "images/aircraft/f-22.webp",
-  "F-35": "images/aircraft/f-35.webp",
-  "A-10": "images/aircraft/a-10.webp",
-  "AC-130J": "images/aircraft/ac-130j.webp",
-  "B-1": "images/aircraft/b-1.webp",
-  "B-2": "images/aircraft/b-2.webp",
-  "B-52": "images/aircraft/b-52.webp",
-  "E-3": "images/aircraft/e-3.webp",
-  "E-4": "images/aircraft/e-4.webp",
-  "EC-130H/J": "images/aircraft/ec-130h-j.webp",
-  "EA-37B": "images/aircraft/ea-37b.webp",
-  "RC-135": "images/aircraft/rc-135.webp",
-  "U-2": "images/aircraft/u-2.webp",
-  "U-28A": "images/aircraft/u-28a.webp",
-  "MC-12W": "images/aircraft/mc-12w.webp",
-  "KC-46": "images/aircraft/kc-46.webp",
-  "KC-135": "images/aircraft/kc-135.webp",
-  "HC-130J": "images/aircraft/hc-130j.webp",
-  "MC-130J": "images/aircraft/mc-130j.webp",
-  "C-130H/J": "images/aircraft/c-130h-j.webp",
-  "C-17": "images/aircraft/c-17.webp",
-  "C-5": "images/aircraft/c-5.webp",
-  "HH-60W": "images/aircraft/hh-60w.webp",
-  "UH-1N": "images/aircraft/uh-1n.webp",
-  "CV-22B": "images/aircraft/cv-22b.webp",
-  "MQ-9": "images/aircraft/mq-9.webp",
-  "RQ-4": "images/aircraft/rq-4.webp",
-  "RQ-170": "images/aircraft/rq-170.webp"
- }
+    "F-15/E/EX": "images/aircraft/f-15-e-ex.webp",
+    "F-16": "images/aircraft/f-16.webp",
+    "F-22": "images/aircraft/f-22.webp",
+    "F-35": "images/aircraft/f-35.webp",
+    "A-10": "images/aircraft/a-10.webp",
+    "AC-130J": "images/aircraft/ac-130j.webp",
+    "B-1": "images/aircraft/b-1.webp",
+    "B-2": "images/aircraft/b-2.webp",
+    "B-52": "images/aircraft/b-52.webp",
+    "E-3": "images/aircraft/e-3.webp",
+    "E-4": "images/aircraft/e-4.webp",
+    "EC-130H/J": "images/aircraft/ec-130h-j.webp",
+    "EA-37B": "images/aircraft/ea-37b.webp",
+    "RC-135": "images/aircraft/rc-135.webp",
+    "U-2": "images/aircraft/u-2.webp",
+    "U-28A": "images/aircraft/u-28a.webp",
+    "MC-12W": "images/aircraft/mc-12w.webp",
+    "KC-46": "images/aircraft/kc-46.webp",
+    "KC-135": "images/aircraft/kc-135.webp",
+    "HC-130J": "images/aircraft/hc-130j.webp",
+    "MC-130J": "images/aircraft/mc-130j.webp",
+    "C-130H/J": "images/aircraft/c-130h-j.webp",
+    "C-17": "images/aircraft/c-17.webp",
+    "C-5": "images/aircraft/c-5.webp",
+    "HH-60W": "images/aircraft/hh-60w.webp",
+    "UH-1N": "images/aircraft/uh-1n.webp",
+    "CV-22B": "images/aircraft/cv-22b.webp",
+    "MQ-9": "images/aircraft/mq-9.webp",
+    "RQ-4": "images/aircraft/rq-4.webp",
+    "RQ-170": "images/aircraft/rq-170.webp"
+  }
 };
