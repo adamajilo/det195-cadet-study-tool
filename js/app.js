@@ -440,7 +440,7 @@ const JF={sf:false};
 const SF_CODES=new Set(["13A","13S","14N","17D","17S","17X","62E","63A"]);
 const JOB_FIX=[[/Enviromental/g,"Environmental"],[/Resoution/g,"Resolution"],[/Otorlaryngologist/g,"Otorhinolaryngologist"]];
 function loadJobs(){
-  return fetch("afsc.txt").then(r=>r.ok?r.text():"").catch(()=>"").then(t=>{
+  return fetch("data/afsc.txt").then(r=>r.ok?r.text():"").catch(()=>"").then(t=>{
     const seen=new Set();
     t.split(/\r?\n/).forEach(line=>{
       const i=line.indexOf("#");if(i<1)return;
