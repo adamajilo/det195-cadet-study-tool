@@ -95,10 +95,10 @@
     const getMetrics = () => {
       const cards = typeof C !== "undefined"
         ? C.filter(c =>
-            typeof baseVis === "function" &&
-            baseVis(c) &&
-            c.kind !== "job"
-          )
+          typeof baseVis === "function" &&
+          baseVis(c) &&
+          c.kind !== "job"
+        )
         : [];
 
       const masteredCount = typeof mastered === "function"
@@ -136,8 +136,8 @@
         ? `<div class="acct-user">
             <a href="#account" class="user-link">
               ${user.photoURL
-                ? `<img src="${esc(user.photoURL)}" class="acct-avatar" alt="">`
-                : ""}
+          ? `<img src="${esc(user.photoURL)}" class="acct-avatar" alt="">`
+          : ""}
               <span>${esc(user.displayName || user.email?.split("@")[0] || "Cadet")}</span>
             </a>
             <button class="tg" id="so">Sign out</button>
@@ -181,7 +181,7 @@
     // Public profile information goes into publicProfiles/{uid}.
     const pushPublicProfile = async () => {
       if (!user) return;
-if (window.isListed && !window.isListed()) return;
+      if (window.isListed && !window.isListed()) return;
       const metrics = getMetrics();
 
       await setDoc(doc(db, "publicProfiles", user.uid), {
@@ -193,7 +193,7 @@ if (window.isListed && !window.isListed()) return;
         weekly: {
           weekId: metrics.weekId,
           xp: metrics.weeklyXp,
-                  ...(window.flightFields ? window.flightFields() : {}),
+          ...(window.flightFields ? window.flightFields() : {}),
         },
         updated: Date.now()
       }, { merge: true });
@@ -390,26 +390,26 @@ if (window.isListed && !window.isListed()) return;
       timer = setTimeout(sync, 1500);
     };
 
-  onAuthStateChanged(auth, async currentUser => {
-  user = currentUser;
+    onAuthStateChanged(auth, async currentUser => {
+      user = currentUser;
 
-  // Activate this account's private local storage.
-  if(typeof window.activateAccountStorage==="function"){
-    window.activateAccountStorage(currentUser?.uid||null);
-  }
+      // Activate this account's private local storage.
+      if (typeof window.activateAccountStorage === "function") {
+        window.activateAccountStorage(currentUser?.uid || null);
+      }
 
-  window.authInitialized = true;
+      window.authInitialized = true;
 
-  paint();
+      paint();
 
-  window.dispatchEvent(new Event("auth-state-changed"));
+      window.dispatchEvent(new Event("auth-state-changed"));
 
-  if (user) {
-    const ok = await sync();
+      if (user) {
+        const ok = await sync();
 
-    if (ok) toast("Progress synced");
-  }
-});
+        if (ok) toast("Progress synced");
+      }
+    });
 
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden && user) sync();
