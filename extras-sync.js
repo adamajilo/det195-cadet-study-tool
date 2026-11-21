@@ -46,3 +46,84 @@
     console.error("Reports failed to load:",err);
   }
 })();
+
+// Syncs daily challenge results to the signed-in account (users/{uid}.daily)
+// so the daily streak and today's score follow a cadet across devices.
+(async function dailySync(){
+  const fb=window.FIREBASE_CONFIG;
+  if(!fb||!fb.apiKey||String(fb.apiKey).startsWith("YOUR"))return;
+  try{
+    const V="10.12.2",base="https://www.gstatic.com/firebasejs/"+V+"/";
+    const [{getApp},{getFirestore,doc,getDoc,setDoc}]=await Promise.all([
+      import(base+"firebase-app.js"),
+      import(base+"firebase-firestore.js")
+    ]);
+    const wait=f=>new Promise(r=>{const t=setInterval(()=>{let v=false;try{v=f()}catch(e){}if(v){clearInterval(t);r(v)}},200)});
+    await wait(()=>getApp());
+    await wait(()=>typeof window.dailyRecord==="function"&&window.getUser);
+
+    const db=getFirestore(getApp());
+    const me=()=>window.getUser&&window.getUser();
+    const KEEP=120;
+
+    const trim=g=>{
+      const o={};
+      Object.keys(g).sort().slice(-KEEP).forEach(k=>{o[k]=g[k]});
+      return o;
+    };
+    // Keep every day from both sides. If both have the same day, keep the higher score.
+    const merge=(a,b)=>{
+      const o=Object.assign({},b);
+      Object.keys(a).forEach(k=>{if(!o[k]||(a[k].s||0)>(o[k].s||0))o[k]=a[k]});
+      return o;
+    };
+    const refreshHome=()=>{
+      const e=document.getElementById("xt-daily");
+      if(e){e.remove();if(typeof decorate==="function")decorate()}
+    };
+
+    const push=async g=>{
+      const u=me();
+      if(!u)return;
+      try{
+        await setDoc(doc(db,"users",u.uid),{daily:JSON.stringify(trim(g||dailyGet()))},{merge:true});
+      }catch(e){console.warn("Daily save failed",e)}
+    };
+
+    let last=0;
+    const pull=async force=>{
+      const u=me();
+      if(!u)return;
+      if(!force&&Date.now()-last<60000)return;
+      last=Date.now();
+      try{
+        const s=await getDoc(doc(db,"users",u.uid));
+        let cloud={};
+        if(s.exists()&&s.data().daily){
+          try{cloud=JSON.parse(s.data().daily)||{}}catch(e){cloud={}}
+        }
+        const local=dailyGet();
+        const merged=trim(merge(local,cloud));
+        const text=JSON.stringify(merged);
+        if(text!==JSON.stringify(local)){
+          localStorage.setItem(dKey(),text);
+          refreshHome();
+        }
+        if(text!==JSON.stringify(cloud))await push(merged);
+      }catch(e){console.warn("Daily load failed",e)}
+    };
+
+    // Save to the account right after a daily challenge is recorded.
+    const baseRecord=window.dailyRecord;
+    window.dailyRecord=function(t){
+      baseRecord(t);
+      push();
+    };
+
+    window.addEventListener("auth-state-changed",()=>pull(true));
+    document.addEventListener("visibilitychange",()=>{if(!document.hidden)pull(false)});
+    if(window.authInitialized&&me())pull(true);
+  }catch(err){
+    console.error("Daily sync failed to load:",err);
+  }
+})();
