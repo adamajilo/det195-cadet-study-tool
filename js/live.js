@@ -290,9 +290,7 @@ function lvHostView() {
   $("#lv-del").onclick = lvEnd;
 }
 
-// Safety net for players: phones can silently drop the live connection, which
-// leaves them stuck on the last screen. Check the game directly every few seconds
-// and whenever the page comes back to the front, and only ever move forward.
+
 const lvProg = g => g ? ((typeof g.qIndex === "number" ? g.qIndex : -1) + 1) * 4 + ({ lobby: 0, question: 1, reveal: 2, done: 3 }[g.status] || 0) : -1;
 async function lvPoll() {
   if (LV.mode !== "play" || document.hidden || !window.lvPeekGame) return;

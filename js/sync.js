@@ -48,7 +48,7 @@
     let busy = false;
     let again = false;
 
-    // Local calendar date, avoiding UTC date shifts.
+    
     const localDate = d =>
       d.getFullYear() + "-" +
       String(d.getMonth() + 1).padStart(2, "0") + "-" +
@@ -63,7 +63,7 @@
 
     window.getCurrentWeekId = getCurrentWeekId;
 
-    // Handles both JSON strings and regular Firestore values.
+   
     const parseStored = (value, fallback) => {
       if (value == null || value === "") return fallback;
 
@@ -162,7 +162,7 @@
       }
     };
 
-    // Private study progress and XP stay in users/{uid}.
+  
     const pushPrivateProgress = async () => {
       if (!user) return;
 
@@ -178,7 +178,7 @@
       }, { merge: true });
     };
 
-    // Public profile information goes into publicProfiles/{uid}.
+  
     const pushPublicProfile = async () => {
       if (!user) return;
       if (window.isListed && !window.isListed()) return;
@@ -199,7 +199,7 @@
       }, { merge: true });
     };
 
-    // Merge weekly XP without adding the same XP twice.
+    
     const mergeWeeklyXp = cloudXp => {
       if (!cloudXp || !cloudXp.weekId) return;
 
@@ -230,7 +230,7 @@
       }
     };
 
-    // Lifetime XP never resets.
+ 
     const mergeTotalXp = cloudTotalXp => {
       const local = Math.max(
         0,
@@ -264,7 +264,7 @@
         const privateRef = doc(db, "users", user.uid);
         const publicRef = doc(db, "publicProfiles", user.uid);
 
-        // Download private progress.
+       
         const privateSnap = await getDoc(privateRef);
 
         if (privateSnap.exists()) {
@@ -287,7 +287,7 @@
           mergeTotalXp(data.totalXp);
         }
 
-        // Also check the public profile in case it has a newer XP value.
+       
         const publicSnap = await getDoc(publicRef);
 
         if (publicSnap.exists()) {
@@ -297,7 +297,7 @@
           mergeTotalXp(publicData.totalXp);
         }
 
-        // Upload the merged local progress and updated public profile.
+        
         await pushPrivateProgress();
         await pushPublicProfile();
 
@@ -344,7 +344,7 @@
       }
     };
 
-    // Fetch only profiles belonging to the current week.
+   
     window.fetchWeeklyLeaderboard = async () => {
       const weekId = getCurrentWeekId();
 
@@ -372,7 +372,7 @@
       });
     };
 
-    // Public profile lookup, never private study progress.
+    
     window.fetchUserProfile = async userId => {
       const snap = await getDoc(
         doc(db, "publicProfiles", userId)
@@ -393,7 +393,7 @@
     onAuthStateChanged(auth, async currentUser => {
       user = currentUser;
 
-      // Activate this account's private local storage.
+      
       if (typeof window.activateAccountStorage === "function") {
         window.activateAccountStorage(currentUser?.uid || null);
       }

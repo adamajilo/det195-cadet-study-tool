@@ -53,14 +53,14 @@ const srs = store.get("wk2_srs", {});
 const days = store.get("wk2_days", []);
 const INTERVAL = [0, 0, 1, 3, 7, 14];
 
-// Switch the active local progress to the selected Firebase account.
+
 window.activateAccountStorage = uid => {
   store.setAccount(uid);
 
   const savedSrs = store.get("wk2_srs", {});
   const savedDays = store.get("wk2_days", []);
 
-  // Preserve the existing object and array references.
+ 
   Object.keys(srs).forEach(k => delete srs[k]);
   Object.assign(srs, savedSrs);
 
@@ -81,8 +81,7 @@ const saveSrs = () => { store.set("wk2_srs", srs); ping() };
 function touchDay() { const t = today(); if (!days.includes(t)) { days.push(t); store.set("wk2_days", days.slice(-90)); ping() } }
 function streak() { let n = 0; const d = new Date(); if (!days.includes(ymd(d))) d.setDate(d.getDate() - 1); while (days.includes(ymd(d))) { n++; d.setDate(d.getDate() - 1) } return n }
 
-// Lifetime XP initialization.
-// Existing weekly XP becomes the starting lifetime XP baseline.
+
 const initialWeeklyXp = store.get("wk2_xp", { weekId: "", xp: 0 });
 let initialTotalXp = store.get("wk2_total_xp", null);
 
@@ -94,7 +93,7 @@ if (initialTotalXp === null || !Number.isFinite(Number(initialTotalXp))) {
   store.set("wk2_total_xp", initialTotalXp);
 }
 
-// Expose lifetime XP for sync.js.
+
 window.getTotalXp = () => Math.max(0, Number(store.get("wk2_total_xp", 0)) || 0);
 
 const baseVis = c => (cfg.zh || c.kind !== "zh") && (cfg.jobs || c.kind !== "job") && (cfg.ac || (c.kind !== "ac" && c.g !== "Aircraft"));
@@ -135,7 +134,7 @@ function rate(c, ok) {
     xpStore.xp = 0;
   }
 
-  // Track the exact XP earned during this review.
+  
   let earnedXp = 0;
 
   if (ok && prior.xpDate !== today()) {
@@ -148,11 +147,11 @@ function rate(c, ok) {
     }
   }
 
-  // Weekly XP resets each week.
+
   xpStore.xp = (Number(xpStore.xp) || 0) + earnedXp;
   store.set("wk2_xp", xpStore);
 
-  // Lifetime XP never resets.
+ 
   if (earnedXp > 0) {
     const lifetimeXp = Math.max(
       0,
@@ -472,11 +471,11 @@ function jobsView() {
   draw();
 }
 
-// Account Profile & Stats View
+
 function accountView() {
   const app = $("#app");
 
-  // Wait until Firebase finishes checking the saved session.
+  
   if (!window.authInitialized) {
     app.innerHTML = `
       <h2 class="h">Account Settings</h2>
@@ -577,7 +576,7 @@ function accountView() {
   };
 }
 
-// Weekly Leaderboard View with Live Countdown & Clickable Profiles
+
 async function leaderboardView() {
   const app = $("#app");
 
@@ -677,7 +676,7 @@ async function leaderboardView() {
   });
 }
 
-// Inspect Other Cadets' Profiles
+
 window.viewCadetProfile = async userId => {
   if (typeof window.fetchUserProfile !== "function") return;
 
@@ -787,7 +786,7 @@ function mergeProgress(r) {
     store.set("wk2_days", days);
   }
 
-  // Merge weekly XP without double-counting.
+
   if (r.xp && r.xp.weekId) {
     const currentWeek = window.getCurrentWeekId
       ? window.getCurrentWeekId()
@@ -814,8 +813,7 @@ function mergeProgress(r) {
     }
   }
 
-  // Merge lifetime XP using the higher value.
-  // This supports cloud data if totalXp is also included in the private sync.
+  
   if (r.totalXp !== undefined && r.totalXp !== null) {
     const localTotal = Math.max(
       0,
@@ -834,7 +832,7 @@ function mergeProgress(r) {
   return changed;
 }
 
-// Robust Dropdown Handler for Mobile and Desktop
+
 function initDropdown() {
   const btn = document.getElementById("moreBtn");
   const menu = document.getElementById("moreMenu");
@@ -858,7 +856,7 @@ function initDropdown() {
 
 document.addEventListener("DOMContentLoaded", initDropdown);
 
-// Registered Views Mapping
+
 const views = { home, drill, test, recite, plan, jobs: jobsView, account: accountView, leaderboard: leaderboardView };
 
 function render() {
@@ -975,7 +973,7 @@ window.addEventListener("auth-state-changed", () => {
   }
 });
 
-// PWA: register the service worker (HTTPS or localhost only).
+
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("sw.js").catch(() => { });

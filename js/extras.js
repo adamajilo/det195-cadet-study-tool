@@ -196,10 +196,7 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal()
   setTimeout(check, 2500);
 })();
 
-// Harder multiple-choice options.
-// Replaces buildQ so the three wrong answers look like the right one
-// (same topic and week, similar wording and length) instead of random cards.
-// Used by the Test tab, photo drill and live quiz. Delete this file to go back.
+
 (function () {
   const norm = s => String(s).toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff ]/g, " ").replace(/\s+/g, " ").trim();
   const grams = s => { const t = s.replace(/ /g, ""), m = new Map(); for (let i = 0; i < t.length - 1; i++) { const b = t.slice(i, i + 2); m.set(b, (m.get(b) || 0) + 1) } return m };

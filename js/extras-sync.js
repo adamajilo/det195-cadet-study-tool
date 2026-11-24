@@ -70,7 +70,7 @@
       Object.keys(g).sort().slice(-KEEP).forEach(k => { o[k] = g[k] });
       return o;
     };
-    // Keep every day from both sides. If both have the same day, keep the higher score.
+    
     const merge = (a, b) => {
       const o = Object.assign({}, b);
       Object.keys(a).forEach(k => { if (!o[k] || (a[k].s || 0) > (o[k].s || 0)) o[k] = a[k] });
@@ -112,7 +112,7 @@
       } catch (e) { console.warn("Daily load failed", e) }
     };
 
-    // Save to the account right after a daily challenge is recorded.
+    
     const baseRecord = window.dailyRecord;
     window.dailyRecord = function (t) {
       baseRecord(t);

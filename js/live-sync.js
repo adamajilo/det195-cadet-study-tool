@@ -11,13 +11,12 @@
     const wait = f => new Promise(r => { const t = setInterval(() => { let v = false; try { v = f() } catch (e) { } if (v) { clearInterval(t); r(v) } }, 200) });
     await wait(() => getApp());
 
-    // Streak bonus: from the 2nd correct answer in a row, add STREAK_STEP points
-    // per extra answer in the streak, up to STREAK_MAX steps.
+   
     const STREAK_STEP = 100, STREAK_MAX = 5;
 
     const hApp = getApp(), hAuth = getAuth(hApp), hDb = getFirestore(hApp);
     const pApp = initializeApp(fb, "live"), pAuth = getAuth(pApp);
-    // Players use long polling when a network blocks the normal live connection.
+  
     let pDb;
     try { pDb = initializeFirestore(pApp, { experimentalAutoDetectLongPolling: true }) }
     catch (e) { pDb = getFirestore(pApp) }
